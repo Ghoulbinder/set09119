@@ -1,4 +1,4 @@
-// Math constants
+﻿// Math constants
 #define _USE_MATH_DEFINES
 #include <cmath>  
 #include <random>
@@ -206,14 +206,40 @@ int main(int argc, const char** argv)
 	particle.Translate(glm::vec3(0.0f, 5.0f, 0.0f)); // move up a bit
 	//particle.Scale(glm::vec3(.1f, .1f, .1f)); // shrink it to 10% of original
 	//particle.Rotate((GLfloat) M_PI_2, glm::vec3(1.0f, 0.0f, 0.0f)); // rotate by 90 degrees around X axis
+	
+	
+	//add gravity
+	//glm::vec3 gravity(0.0f, -9.81f, 0.0f);
 
+	// add velocity and set to 0.
+	glm::vec3 velocity(0.0f, 0.0f, 0.0f);
+
+	//glm::vec3 initVelocity(0.0f, 0.0f, 0.0f);
+
+	//position of the particle.
+	particle.SetPosition(glm::vec3(10.0f, 10.0f, 0.0f));
+
+	//vriable for particle position
+	glm::vec3 particlePosition(10.0f,10.0f, 0.0f); 
+
+	//variable for current position
+	glm::vec3 currentPosition = particlePosition;
+
+	
+
+	// Update the particle's velocity based on gravity.
+	//velocity += gravity * deltaTime;
+
+	//use sin between 1 and -1 to make the particle osscilate
+	
+	
 	/*
 	CREATE THE PARTICLE(S) YOU NEED TO COMPLETE THE TASKS HERE
 	*/
 
 	GLfloat timeStart = (GLfloat)glfwGetTime();
 	GLfloat lastFrameTimeSinceStart = timeStart;
-	const float ANIMATION_SPEED = 11.0f; // increase this if you want time to move faster
+	const float ANIMATION_SPEED = 1.0f; // increase this if you want time to move faster
 	// Game loop
 	while (!glfwWindowShouldClose(window))
 	{
@@ -226,6 +252,8 @@ int main(int argc, const char** argv)
 
 		// save the current time since start to the previous time since start, so that we can calculate the elapsed time between the different frames
 		lastFrameTimeSinceStart = timeSinceStart;
+
+		
 
 		/*
 		**	INTERACTION
@@ -248,19 +276,101 @@ int main(int argc, const char** argv)
 
 
 		// 1 - make particle fall with accelerating speed using the .Translate method
+		// 
+		// Update the particle's position based on its velocity.
+	
 
+		/*timeSinceStart(u + v) / 2
+
+			s = t(u +v)/2
+		s=ut +1/2at^2*/
+
+
+		
 
 		// 2 - same as above using the .SetPosition method
 
+	    //currentPosition = initVelocity * timeSinceStart + 0.5f * gravity * (timeSinceStart * timeSinceStart);
+
+		//particle.SetPosition(currentPosition);
 
 		// 3 - make particle oscillate above the ground plane
-
+		
+		// Amplitude of oscillation
+		//float amplitude = 5.0f; 
+		// //oscillations per second
+		//float frequency = 1.0f;
+		//
+		//float oscilY = amplitude * sin(2 * M_PI * frequency * timeSinceStart);
+		//
+		//particlePosition.y = oscilY; 
+		//
+		//particle.SetPosition(particlePosition); 
 
 		// 4 - particle animation from initial velocity and acceleration
+		glm::vec3 initialPosition(-10.0f, 5.0f, 0.0f); 
+		glm::vec3 initialVelocity(5.0f, 10.0f, 0.0f); 
+		glm::vec3 gravity(0.0f, -9.81f, 0.0f); 
+		
+		//s=u*t+ 1/2*a*t^2
 
+		//particlePosition = initialPosition + (initialVelocity * timeSinceStart) + (0.5f * gravity * timeSinceStart * timeSinceStart);
+		// 
+		////v = u + at
+		////glm::vec3 finalVelocity = initialVelocity + gravity * timeSinceStart;
+		//
+		//// Set the updated position using SetPosition()
+		//particle.SetPosition(particlePosition); 
 
 		// 5 - add collision with plane
+		// 
+		// y-coordinate of the ground plane
+		float planeHeight = 1.0f;
+		//Damping factor to simulate energy loss (between 0 and 1, where 1 is no energy loss)
+		float dampingFactor = 0.9f;
 
+		// Update position using motion equations
+		particlePosition = initialPosition + (initialVelocity * timeSinceStart) + (0.5f * gravity * timeSinceStart * timeSinceStart);
+
+		//new velocity
+		glm::vec3 newVelocity(0.0f, 15.0f, 0.0f);
+
+
+
+		// Check for collision with the ground plane
+		if (particlePosition.y <= planeHeight) { 
+			// Collision detected, reverse the y-velocity
+			
+			//normal of the ground since the plane is horizonal
+			glm::vec3 normal = glm::vec3(0, 1, 0);
+
+			//vreflected=v−2(v⋅n)n
+			
+			initialVelocity.y = -(initialVelocity.y - 2 * glm::dot(initialVelocity, normal) * normal.y);
+			
+			// Apply the damping factor to simulate energy loss
+			initialVelocity = newVelocity * dampingFactor;
+
+			// Correct the position so the particle doesn't go below the ground
+			particlePosition.y = planeHeight;
+
+			// Adjust initialPosition for the next frame's calculation
+			initialPosition.y = planeHeight;  
+
+			
+
+		}
+
+		// Update the particle's velocity due to gravity
+		initialVelocity += gravity * timeSinceStart;  
+
+		// Update the particle's position for the next frame
+		initialPosition += initialVelocity * timeSinceStart; 
+
+		particlePosition = initialPosition; 
+
+		// Update the particle's position
+		particle.SetPosition(particlePosition); 
 
 		// 6 - Same as above but for a collection of particles
 
