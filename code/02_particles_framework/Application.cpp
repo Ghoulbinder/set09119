@@ -115,8 +115,8 @@ int Application::InitWindow() {
 
 	// static variables for callback function
 	// window
-	static const GLuint REQUESTED_WIDTH = 800;
-	static const GLuint REQUESTED_HEIGHT = 600;
+	static const GLuint REQUESTED_WIDTH = 1260;
+	static const GLuint REQUESTED_HEIGHT = 900;
 
 	m_window = glfwCreateWindow(REQUESTED_WIDTH, REQUESTED_HEIGHT, "Physics-Based Animation", nullptr, nullptr);
 
@@ -187,6 +187,8 @@ void Application::MainLoop() {
 
 		// save the current time since start to the previous time since start, so that we can calculate the elapsed time between the different frames
 		lastFrameTimeSinceStart = timeSinceStart;
+
+		
 
 		// poll input events
 		glfwPollEvents();

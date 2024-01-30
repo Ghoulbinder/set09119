@@ -18,6 +18,11 @@ void SymplecticEuler(vec3& pos, vec3& vel, float mass, const vec3& accel, const 
 {
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// TODO: Implement
+	// Using the integrator, compute the new velocity (vel+1)
+	vel = vel + dt * accel;
+
+	// Using the integrator, compute the new position (pos+1)
+	pos = pos + dt * vel;
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 }
 
@@ -55,6 +60,7 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 	ground.SetMesh(groundMesh);
 	ground.SetShader(defaultShader);
 	ground.SetScale(vec3(10.0f));
+	ground.SetPosition(vec3(0.0f, 0.0f, 0.0f));
 
 	// Initialise particle
 	particle.SetMesh(mesh);
@@ -79,11 +85,29 @@ void PhysicsEngine::Update(float deltaTime, float totalTime)
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// TODO: Implement a simple integration scheme
 	vec3 p = particle.Position(), v = particle.Velocity();
-	vec3 acceleration = vec3(0.0f);
+	vec3 acceleration = GRAVITY;
 	SymplecticEuler(p,v, particle.Mass(), acceleration, impulse, deltaTime);
 	particle.SetPosition(p);
 	particle.SetVelocity(v);
 
+	// Check for collision with the ground
+	if (particle.Position().y <= 0.0f) {
+		// Particle is colliding with the ground
+		vec3 particleVelocity = particle.Velocity();
+
+		// Calculate the reflected velocity using the law of reflection
+		// Assuming the ground is horizontal, so only the vertical component is inverted
+		particleVelocity.y = -particleVelocity.y * 0.9f; // Adjust coefficientOfRestitution as needed
+
+		// Update the particle's velocity with the reflected velocity
+		particle.SetVelocity(particleVelocity);
+
+		// Move the particle slightly above the ground to prevent sticking
+		particle.SetPosition(vec3(particle.Position().x, 0.001f, particle.Position().z));
+	}
+
+
+	
 	
 
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
