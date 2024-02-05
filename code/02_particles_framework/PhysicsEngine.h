@@ -22,6 +22,7 @@ public:
 private:
 
 	PhysicsBody ground;
+	PhysicsBody cube;
 	Particle particle;
 
 };
