@@ -23,6 +23,6 @@ private:
 
 	PhysicsBody ground;
 	PhysicsBody cube;
-	Particle particle;
+	Particle particle, particle2, particle3, particle4;
 
 };
