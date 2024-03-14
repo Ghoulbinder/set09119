@@ -151,36 +151,41 @@ std::string vec3_to_string(const glm::vec3& vec) {
 void ApplyGravityAndIntegrate(RigidBody& rb, const vec3& gravity, float deltaTime) {
 	// Apply linear drag
 	float linearDragCoefficient = 0.47f; // Example value, adjust based on object characteristics
-	vec3 velocity = rb.GetVelocity();
-	vec3 linearDragForce = -linearDragCoefficient * glm::length(velocity) * velocity;
-	rb.ApplyForce(linearDragForce);
+	vec3 velocity = rb.GetVelocity(); 
+	vec3 linearDragForce = -linearDragCoefficient * glm::length(velocity) * velocity; 
+	rb.ApplyForce(linearDragForce); 
 
 	// Apply gravity force to the rigid body
 	vec3 gravitationalForce = gravity * rb.Mass();
 	rb.ApplyForce(gravitationalForce);
 
-	// Apply angular drag
-	float angularDragCoefficient = 0.05f; // Example value, adjust as necessary
-	vec3 angularVelocity = rb.GetAngularVelocity();
-	float angularVelocityMagnitude = glm::length(angularVelocity);
-	float newAngularVelocityMagnitude = angularVelocityMagnitude - angularDragCoefficient * angularVelocityMagnitude * deltaTime;
-	newAngularVelocityMagnitude = glm::max(newAngularVelocityMagnitude, 0.0f);
-	if (angularVelocityMagnitude > 0.0f) {
-		vec3 newAngularVelocity = (angularVelocity / angularVelocityMagnitude) * newAngularVelocityMagnitude;
+	// Apply angular drag 
+	float angularDragCoefficient = 0.05; // This is a made-up coefficient for demonstration
+	// Calculate the magnitude of the angular velocity.
+	float angularVelocityMagnitude = glm::length(rb.GetAngularVelocity());
+	// Calculate the new magnitude after applying drag. 
+	float newMagnitude = angularVelocityMagnitude - angularDragCoefficient * angularVelocityMagnitude * deltaTime;
+	// Ensure the new magnitude is not negative.
+	newMagnitude = glm::max(newMagnitude, 0.0f);
+	// Calculate the new angular velocity with the o riginal direction but new magnitude.
+	if (angularVelocityMagnitude > 0.0f) { // Avoid division by zero.
+		glm::vec3 newAngularVelocity = (rb.GetAngularVelocity() / angularVelocityMagnitude) * newMagnitude;
 		rb.SetAngularVelocity(newAngularVelocity);
 	}
 
-	// Integration step for position and velocity
-	vec3 accumulatedForce = rb.AccumulatedForce();
-	vec3 acceleration = accumulatedForce / rb.Mass();
 
+	// Integration step for position and velocity 
+	vec3 accumulatedForce = rb.AccumulatedForce(); 
+	vec3 acceleration = accumulatedForce / rb.Mass(); 
+
+	vec3 currentVel = velocity + acceleration;
 	// Use Symplectic Euler for integration
-	vec3 newPos = rb.Position() + velocity * deltaTime;
-	vec3 newVel = velocity + acceleration * deltaTime;
+	vec3 newPos = rb.Position() + velocity * deltaTime; 
+	vec3 newVel = currentVel + acceleration * deltaTime;  
 
 	// Update the rigid body's position and velocity
-	rb.SetPosition(newPos);
-	rb.SetVelocity(newVel);
+	rb.SetPosition(newPos); 
+	rb.SetVelocity(newVel); 
 }
 
 
@@ -228,6 +233,7 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 	rbody[0].SetPosition(vec3(0.0f, 5.0f, 0.0f));
 	rbody[0].SetScale(vec3(1, 3, 1));
 	rbody[0].SetVelocity(vec3(0.0f, 0.0f, 0.0f));
+	rbody[0].SetMass(1.0f);
 	rbody[0].SetAngularVelocity(glm::vec3(0.0f, 0.0f, 0.0f)); // Example angular velocity 
 
 	// TODO: Get the mesh and shader for rigidy body
@@ -246,11 +252,7 @@ void PhysicsEngine::Task1Init()
 
 void PhysicsEngine::Task1Update(float deltaTime, float totalTime)
 {
-	//Ensure forces and impulses are cleared at the start 
-	for (int i = 0; i < 1; ++i) {
-		rbody[i].ClearForcesImpulses();
-		
-	}
+	
 
 	// Integration step for both particles
 	for (int i = 0; i < 1; ++i) {
@@ -273,10 +275,7 @@ void PhysicsEngine::Task1Update(float deltaTime, float totalTime)
 void PhysicsEngine::Update(float deltaTime, float totalTime)
 {
 	
-	for (int i = 0; i < 1; ++i) { // Assuming '1' is replaced with the actual number of rigid bodies
-		std::cout << "Updating RigidBody " << i << " with deltaTime: " << deltaTime << "\n";
-		ApplyGravityAndIntegrate(rbody[i], GRAVITY, deltaTime);
-	}
+	
 
 		static double accumulator = 0.0;
 		const double fixedDeltaTime = 0.016; // 16ms for a 60Hz update rate 
@@ -373,7 +372,7 @@ void PhysicsEngine::Update(float deltaTime, float totalTime)
 		    else if (scenario == 1 && !scenarioApplied[1]) {
 					
 				if (!scenarioApplied[1]) {
-					rbody[0].ClearForcesImpulses();
+					//rbody[0].ClearForcesImpulses();
 
 					// Apply impulses
 					rbody[0].SetVelocity(vec3(-1.0f, 0.0f, 0.0f));
@@ -385,6 +384,8 @@ void PhysicsEngine::Update(float deltaTime, float totalTime)
 
 					scenarioApplied[1] = true;
 				}
+
+
 
 				ApplyGravityAndIntegrate(rbody[0], GRAVITY, fixedDeltaTime); 
 
