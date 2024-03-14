@@ -1,8 +1,10 @@
 #include "PhysicsEngine.h"
 #include "Application.h"
 #include "Camera.h"
+#include "chrono"
 
 using namespace glm;
+using namespace std::chrono;
 
 // Define the gravity vector for the simulation
 const glm::vec3 GRAVITY = glm::vec3(0, -9.81, 0);
@@ -33,12 +35,19 @@ void SymplecticEuler(vec3& pos, vec3& vel, float mass, const vec3& accel, const 
 	pos = pos + dt * vel;
 
 }
-void Verlet(vec3& pos, vec3& vel, float mass, const vec3& accel, const vec3& impulse, float dt)
-{
-	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	// TODO: Implement
-	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+void Verlet(vec3& pos, vec3& vel, vec3& prev_pos, float mass, const vec3& accel, float dt) {
+	// Calculate the new position
+	vec3 newPos = pos * 2.0f - prev_pos + accel * dt * dt;
+
+	// Update velocity based on the change in position
+	// Note: This velocity calculation assumes uniform time steps and is an approximation.
+	vel = (newPos - prev_pos) / (2.0f * dt);
+
+	// Update previous and current positions for the next iteration
+	prev_pos = pos; 
+	pos = newPos; 
 }
+
 
 void Rk4(vec3& pos, vec3& vel, float mass, const vec3& accel, const vec3& impulse, float dt)
 {
@@ -94,6 +103,9 @@ vec3 BlowDryerForce(const vec3& particlePosition, float cone_y_base, float cone_
 // This is called once and it Initialises the physics engine with meshes, shaders and initial configurations
 void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 {
+	
+	currentTime = duration_cast<duration<double>>(high_resolution_clock::now().time_since_epoch()).count();
+
 	// Get a few meshes/shaders from the databases
 	auto defaultShader = shaderDb.Get("default");
 	auto particleMesh = meshDb.Get("tetra");
@@ -150,6 +162,8 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 	particle4.SetScale(vec3(0.1f));
 	particle4.SetVelocity(vec3(1.f, 0.0f, 2.f));
 
+	
+
 	camera = Camera(vec3(0, 2.5, 10));
 
 }
@@ -157,6 +171,27 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 // Update the physics simulation every frame
 void PhysicsEngine::Update(float deltaTime, float totalTime)
 {
+	float dt = 0.016f;
+	auto seconds =high_resolution_clock::now(); 
+	auto timeSinceEpoch = seconds.time_since_epoch();
+	auto newTime = duration_cast<duration<double>>(timeSinceEpoch).count(); 
+
+	double frameTime = newTime - currentTime; 
+	currentTime = newTime; 
+
+	 //Clamping frameTime to avoid spiral of death
+	if (frameTime > 0.25)
+		frameTime = 0.25; 
+	
+	accumulator += frameTime;
+	
+	while (accumulator >= dt) {
+		
+	
+		accumulator -= dt;
+	}
+
+
 	float coefficientOfRestitution = 0.9f;
 	vec3 cubeCentre = glm::vec3(0.0f); // Cube is centered at the origin
 	float cubeSize = 10.0f; // Cube extends from -1 to 1 in all axes  
@@ -186,14 +221,22 @@ void PhysicsEngine::Update(float deltaTime, float totalTime)
 	vec3 p3 = particle3.Position(), v3 = particle3.Velocity();
 	vec3 p4 = particle4.Position(), v4 = particle4.Velocity();
 
-	// Assuming impulse2 is calculated and includes all impulses acting on particle2
+	vec3 prev_pos3;
+
+	// Initialize particle3's previous position
+	prev_pos3 = p3 - v3 * dt; // Example initialization, assuming dt is your timestep and is defined
+
 	
 
 	// Apply Explicit Euler to particle2
 	ExplicitEuler(p2, v2, particle2.Mass(), GRAVITY, impulse2, deltaTime);
 
-
+	//apply symplectic Euler
 	SymplecticEuler(p , v , particle.Mass(), acceleration, impulse, deltaTime);
+
+	// Apply Verlet integration for particle3
+	Verlet(p3, v3, prev_pos3, particle3.Mass(), GRAVITY, dt);
+
 	
 	
 	particle.SetPosition(p);
@@ -222,26 +265,29 @@ void PhysicsEngine::Update(float deltaTime, float totalTime)
 	// Array of pointers to each particle
 	Particle* particles[4] = { &particle, &particle2, &particle3, &particle4 }; 
 
+	// Define the radius of the particles
+	const float PARTICLE_RADIUS = 0.1f;
+
 	// Iterate over each particle to check for collision with the ground
-	for (int i = 0; i < 4; ++i) { 
+	for (int i = 0; i < 4; ++i) {
 		Particle* p = particles[i]; // Get pointer to current particle 
-		
 
+		// Adjust ground collision check to consider particle radius
+		if (p->Position().y <= PARTICLE_RADIUS) {
+			// Particle is colliding with the ground, adjust position to sit on ground
+			vec3 correctedPosition = p->Position();
+			correctedPosition.y = PARTICLE_RADIUS; // Adjust so bottom of particle is on the ground
 
-		 
-		if (p->Position().y <= 0.0f) {  
-			// Particle is colliding with the ground
-			vec3 particleVelocity = p->Velocity();  
+			vec3 particleVelocity = p->Velocity();
 
-			// Calculate the reflected velocity using the law of reflection
-			// Assuming the ground is horizontal, so only the vertical component is inverted
-			particleVelocity.y = -particleVelocity.y * 0.9f; // Adjust coefficientOfRestitution as needed 
+			// Reflect velocity for the bounce, only if it's moving downward
+			if (particleVelocity.y < 0) {
+				particleVelocity.y = -particleVelocity.y * coefficientOfRestitution;
+			}
 
-			// Update the particle's velocity with the reflected velocity
-			p->SetVelocity(particleVelocity);  
-
-			// Move the particle slightly above the ground to prevent sticking
-			p->SetPosition(vec3(p->Position().x, 0.001f, p->Position().z));  
+			// Update the particle's velocity and position
+			p->SetVelocity(particleVelocity);
+			p->SetPosition(correctedPosition);
 		}
 	}
 

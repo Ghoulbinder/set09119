@@ -2,7 +2,7 @@
 
 
 #include <glm/glm.hpp>
-
+#include "mesh.h" 
 #include "PhysicsObject.h"
 
 // Fwd declaration
@@ -19,11 +19,20 @@ public:
 	void HandleInputKey(int keyCode, bool pressed);
 
 	void Task1Init();
-	void Task1Update(float deltaTime, float totalTime); 
-	
+	void Task1Update(float deltaTime, float totalTime);
+
 	// ... rest of the tasks here
 
+
+
+
 private:
+
+	bool paused = false; // Flag to indicate if the simulation is paused 
+	int scenario = 0; // Variable to store the current test scenario 
+	float scenarioActivationTime = 0.0f; // Tracks when the scenario was activated
+	bool isScenarioPending = false; // Indicates if we're waiting to execute a scenario action
+	float totalTime = 0.0f; // You might already have something similar to track total elapsed time
 
 	PhysicsBody ground;
 

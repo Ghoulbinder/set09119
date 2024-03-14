@@ -119,9 +119,19 @@ public:
 	const glm::vec3& Velocity() const { return m_velocity; }
 	const glm::vec3& AccumulatedForce() { return m_accumulatedForce; }
 	const glm::vec3& AccumulatedImpulse() { return m_accumulatedImpulse; }
+
+	void SetPreviousPosition(const glm::vec3& pos)
+	{
+		prevPosition = pos;
+	}
+	glm::vec3 PreviousPosition() const
+	{
+		return prevPosition;
+	}
 	
 
 private:
+	glm::vec3 prevPosition; 
 	bool m_isFixed = false;
 	float m_mass = 1.0f;								// Particle mass, in kg
 	glm::vec3 m_velocity = glm::vec3(0.0f);				// Velocity, in m/s. Important! Must initialise (like this here), otherwise starting value would be undefined

@@ -114,8 +114,6 @@ public:
 	void SetCoefficientOfRestitution(float cor) { m_cor = cor; }
 	void SetMass(float mass) { m_mass = mass; }
 	void SetVelocity(const glm::vec3& velocity) { m_velocity = velocity; }
-	glm::vec3 GetVelocity() const { return m_velocity; } 
-
 	
 	// Call this at the beginning of a simulation step
 	void ClearForcesImpulses() { m_accumulatedForce = glm::vec3(0.0f);  m_accumulatedImpulse = glm::vec3(0.0f); }
@@ -123,11 +121,6 @@ public:
 	void ApplyForce(const glm::vec3& force) { m_accumulatedForce += force; }
 	// Adds to the sum of impulses
 	void ApplyImpulse(const glm::vec3& impulse) { m_accumulatedImpulse += impulse; }
-
-	void ApplyFrictionImpulse(const glm::vec3& impulse, const glm::vec3& contactPoint, float frictionCoefficient);
-
-
-
 	
 	
 	float Mass() const { return m_mass; }
@@ -151,18 +144,9 @@ public:
 
 	void SetAngularVelocity(const glm::vec3& angVel) { m_angularVelocity = angVel; }
 	void SetAngularAcceleration(const glm::vec3& angAccel) { m_angularAcceleration = angAccel; }
+
 	const glm::vec3& AngularVelocity() const { return m_angularVelocity; }
 	const glm::vec3& AngularAcceleration() const { return m_angularAcceleration; }
-	glm::vec3 GetAngularVelocity() const { return m_angularVelocity; } 
-
-
-	void ApplyFrictionImpulse(const glm::vec3& impulse, const glm::vec3& contactPoint, float frictionCoefficient);
-	void ApplyImpulse(const glm::vec3& impulse, const glm::vec3& contactPoint);
-	void ApplyAngularDrag(float angularDragCoefficient); 
-	void ApplyDrag(float deltaTime);
-	void ApplyForce(const glm::vec3& force);
-	void ApplyImpulseWithRotation(const glm::vec3& impulse, const glm::vec3& contactPoint);
-
 	glm::mat3 InverseInertia();
 
 	void SetInertiaTensor(const glm::mat3& inertiaTensor) {
@@ -171,7 +155,32 @@ public:
 	}
 	
 
-	
+	void RigidBody::ApplyImpulse(const glm::vec3& impulse, const glm::vec3& contactPoint)
+	{
+		// Calculate linear velocity change
+		glm::vec3 deltaVelocity = impulse / Mass();
+
+		// Update linear velocity
+		SetVelocity(Velocity() + deltaVelocity);
+
+		// Calculate angular velocity change using torque
+		glm::vec3 r = contactPoint - Position();
+		glm::vec3 deltaAngularVelocity = glm::inverse(InverseInertiaTensor()) * glm::cross(r, impulse);
+
+		// Update angular velocity
+		SetAngularVelocity(AngularVelocity() + deltaAngularVelocity);
+	}
+
+
+	// This function calculates the impulse, including rotational effects, and applies it to the rigid body.
+	void ApplyImpulseWithRotation(const glm::vec3& impulse, const glm::vec3& contactPoint) {
+		glm::vec3 r = contactPoint - Position(); // Vector from CM to contact point
+		ApplyImpulse(impulse, contactPoint); // Apply linear impulse
+		glm::vec3 angularImpulse = glm::cross(r, impulse);
+		glm::vec3 deltaAngularVelocity = m_inverseInertiaTensor * angularImpulse;
+		m_angularVelocity += deltaAngularVelocity;
+	}
+
 	// Inverse inertia tensor accessor
 	const glm::mat3& InverseInertiaTensor() const { return m_inverseInertiaTensor; }
 
@@ -183,5 +192,4 @@ private:
 	glm::vec3 m_angularAcceleration = glm::vec3(0.0f);
 	glm::mat3 m_inertiaTensor = glm::mat3(1.0f); // The inertia tensor  
 	glm::mat3 m_inverseInertiaTensor = glm::mat3(1.0f); // Inverse of the inertia tensor 
-	
 };
