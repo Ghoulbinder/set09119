@@ -64,42 +64,12 @@ void RigidBody::ApplyImpulse(const glm::vec3& impulse, const glm::vec3& contactP
 	// Update angular velocity
 	SetAngularVelocity(AngularVelocity() + deltaAngularVelocity);
 }
-void RigidBody::ApplyAngularDrag(float deltaTime) {
-	// Assuming you have a way to get the angular drag coefficient. If not, define it.
-	float angularDragCoefficient = 0.05f; // This value is an example.
 
-	// Calculate the magnitude of the angular velocity.
-	float angularVelocityMagnitude = glm::length(m_angularVelocity);
-
-	// Calculate the new magnitude after applying drag.
-	// This formula can vary depending on how you want to simulate drag.
-	float newMagnitude = angularVelocityMagnitude - angularDragCoefficient * angularVelocityMagnitude * deltaTime;
-
-	// Ensure the new magnitude is not negative.
-	newMagnitude = glm::max(newMagnitude, 0.0f);
-
-	// Calculate the new angular velocity with the original direction but new magnitude.
-	if (angularVelocityMagnitude > 0.0f) { // Avoid division by zero.
-		glm::vec3 newAngularVelocity = (m_angularVelocity / angularVelocityMagnitude) * newMagnitude;
-		m_angularVelocity = newAngularVelocity;
-	}
-}
 
 
  
 
-void RigidBody::ApplyDrag(float deltaTime) {
-	// Linear drag
-	float dragCoefficient = 0.47f; // This is an example value
-	glm::vec3 linearDragForce = -dragCoefficient * GetVelocity();
-	ApplyForce(linearDragForce);
 
-	// Angular drag
-	float angularDragCoefficient = 0.05f; // Example value
-	glm::vec3 angularDragForce = -angularDragCoefficient * m_angularVelocity;
-	// Directly modify angular velocity for simplicity
-	m_angularVelocity += angularDragForce * deltaTime;
-}
 
 
 void RigidBody::ApplyForce(const glm::vec3& force) {
@@ -116,15 +86,31 @@ void RigidBody::ApplyImpulseWithRotation(const glm::vec3& impulse, const glm::ve
 	glm::vec3 deltaAngularVelocity = m_inverseInertiaTensor * angularImpulse;
 	m_angularVelocity += deltaAngularVelocity;
 }
-void RigidBody::ApplyFrictionImpulse(const glm::vec3& impulse, const glm::vec3& contactPoint, float frictionCoefficient) {
-	glm::vec3 tangentDirection = glm::cross(contactPoint - Position(), impulse);
-	if (glm::length(tangentDirection) > 0)
-		tangentDirection = glm::normalize(tangentDirection);
 
-	float frictionImpulseMagnitude = glm::length(impulse) * frictionCoefficient;
-	glm::vec3 frictionImpulse = frictionImpulseMagnitude * tangentDirection;
 
-	ApplyImpulse(frictionImpulse, contactPoint);
+void RigidBody::ApplyFriction(const glm::vec3& impulse, const glm::vec3& contactPoint, float frictionCoefficient, float deltaTime) {
+    // First, handle the friction impulse for immediate effect
+    glm::vec3 tangentDirection = glm::cross(contactPoint - Position(), impulse);
+    if (glm::length(tangentDirection) > 0) {
+        tangentDirection = glm::normalize(tangentDirection);
+    }
+    float frictionImpulseMagnitude = glm::length(impulse) * frictionCoefficient;
+    glm::vec3 frictionImpulse = frictionImpulseMagnitude * tangentDirection;
+    ApplyImpulse(frictionImpulse, contactPoint);
+
+    // Then, calculate and apply the friction force for continuous effect over time
+    glm::vec3 frictionForce = -glm::normalize(Velocity()) * frictionCoefficient; // Calculate the friction force as opposite to the velocity direction
+    glm::vec3 deltaVelocity = frictionForce / Mass() * deltaTime; // Apply the friction force to the velocity
+    glm::vec3 newVelocity = Velocity() + deltaVelocity;
+
+    // Check if the velocity should be set to zero (stop condition)
+    if (glm::length(newVelocity) < 0.01f) { // Threshold value can be adjusted
+        newVelocity = glm::vec3(0.0f); // Set velocity to zero to stop the object
+    }
+
+    // Update the object's velocity
+    SetVelocity(newVelocity);
 }
+
 
 

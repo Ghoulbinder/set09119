@@ -156,10 +156,9 @@ public:
 	glm::vec3 GetAngularVelocity() const { return m_angularVelocity; } 
 
 
-	void ApplyFrictionImpulse(const glm::vec3& impulse, const glm::vec3& contactPoint, float frictionCoefficient);
+	void ApplyFriction(const glm::vec3& impulse, const glm::vec3& contactPoint, float frictionCoefficient, float deltaTime);
 	void ApplyImpulse(const glm::vec3& impulse, const glm::vec3& contactPoint);
-	void ApplyAngularDrag(float angularDragCoefficient); 
-	void ApplyDrag(float deltaTime);
+	
 	void ApplyForce(const glm::vec3& force);
 	void ApplyImpulseWithRotation(const glm::vec3& impulse, const glm::vec3& contactPoint);
 
