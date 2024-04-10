@@ -113,6 +113,7 @@ public:
 	void ApplyForce(const glm::vec3& force) { m_accumulatedForce += force; }
 	// Adds to the sum of impulses
 	void ApplyImpulse(const glm::vec3& impulse) { m_accumulatedImpulse += impulse; }
+
 	
 	bool IsFixed() const { return m_isFixed; }
 	float Mass() const { return m_mass; }

@@ -4,10 +4,11 @@
 
 using namespace glm;
 
-void Force::Gravity(Particle& p)
+void Force::Gravity(Particle& rb)
 {
-	auto force = vec3(0, -9.81, 0) * p.Mass();
-	p.ApplyForce(force);
+
+	auto force = vec3(0, -9.81, 0) * rb.Mass();
+	rb.ApplyForce(force);
 }
 
 void Force::Drag(Particle& p)

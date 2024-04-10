@@ -86,6 +86,8 @@ private:
 
 private:
 
+	float accumulator = 0.0f; 
+	const float fixedDeltaTime = 0.016f; // 16ms, for 60Hz update rate  
 	// window handle and dimensions
 	GLFWwindow* m_window = NULL;
 	int m_width;

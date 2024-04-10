@@ -3,10 +3,16 @@
 #include <vector>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/glm.hpp>
+#include "OBB.h" // Include OBB.h  
 
 class Shader;
 class Mesh;
 class Force;
+
+
+
+
 
 // A generic renderable object, such as a particle or the ground, that we can render, move, rotate, etc
 class PhysicsBody
@@ -110,6 +116,7 @@ private:
 class Particle : public PhysicsBody
 {
 public:
+	
 
 	void SetCoefficientOfRestitution(float cor) { m_cor = cor; }
 	void SetMass(float mass) { m_mass = mass; }
@@ -122,11 +129,13 @@ public:
 	// Adds to the sum of forces
 	void ApplyForce(const glm::vec3& force) { m_accumulatedForce += force; }
 	// Adds to the sum of impulses
-	void ApplyImpulse(const glm::vec3& impulse) { m_accumulatedImpulse += impulse; }
+	
 
-	void ApplyFrictionImpulse(const glm::vec3& impulse, const glm::vec3& contactPoint, float frictionCoefficient);
+	
 
+	
 
+	
 
 	
 	
@@ -144,9 +153,15 @@ private:
 	glm::vec3 m_accumulatedImpulse = glm::vec3(0.0f);	// Accumulated impulse in a single simulation step
 };
 
+
+
+
 class RigidBody : public Particle
 {
 public:
+	
+ 
+
 	
 
 	void SetAngularVelocity(const glm::vec3& angVel) { m_angularVelocity = angVel; }
@@ -155,12 +170,10 @@ public:
 	const glm::vec3& AngularAcceleration() const { return m_angularAcceleration; }
 	glm::vec3 GetAngularVelocity() const { return m_angularVelocity; } 
 
-
-	void ApplyFriction(const glm::vec3& impulse, const glm::vec3& contactPoint, float frictionCoefficient, float deltaTime);
-	void ApplyImpulse(const glm::vec3& impulse, const glm::vec3& contactPoint);
+	// Modified to include collision normal and coefficient of restitution
 	
 	void ApplyForce(const glm::vec3& force);
-	void ApplyImpulseWithRotation(const glm::vec3& impulse, const glm::vec3& contactPoint);
+	
 
 	glm::mat3 InverseInertia();
 
@@ -184,3 +197,4 @@ private:
 	glm::mat3 m_inverseInertiaTensor = glm::mat3(1.0f); // Inverse of the inertia tensor 
 	
 };
+

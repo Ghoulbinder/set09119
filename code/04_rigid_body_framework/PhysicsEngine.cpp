@@ -1,47 +1,50 @@
 #include "PhysicsEngine.h"
-
-#include <map>
-#include <numeric>
-
 #include "Application.h"
 #include "Camera.h"
 #include "Force.h"
+#include <cstdlib> // For rand() and srand()
+#include <ctime>   // For time()
 #include <string>
 #include <iostream>
 
 #include <glm/gtx/matrix_cross_product.hpp>
 #include <glm/gtx/orthonormalize.hpp>
-
+#include <glm/ext.hpp> 
+#include <glm/gtx/string_cast.hpp>
 
 using namespace glm;
-using namespace std;
 
-const vec3 GRAVITY = vec3(0, -9.81, 0);
+const glm::vec3 GRAVITY = glm::vec3(0, -9.81, 0);
 
-const float GROUND_Y = 0.0f; // since the ground is at y = 0.0f
+// PARTICLE_RADIUS 
+const float PARTICLE_RADIUS = 1.0f; // Adjustable as needed
 
-RigidBody rbody[1];
-
-int scenario = 0; // This keeps track of the current scenario
-
-// Define flags for each scenario to track whether the impulse has already been applied.
-bool scenarioApplied[4] = { false }; // Initialize all scenario flags as false. Adjust the size based on the number of scenarios.
-bool forceApplied[4] = { false }; // Adjust the size based on the number of scenarios.
-static double scenarioTime[4] = { 0.0 }; // Time since last force application for each scenario
-bool shouldPrint = false; // Set to false to disable printing
-//DO NOT SET VELOCITY AND POSISTION TO 0 WHEN CALCULATING THE IMMPULSE
+const int GRID_SIZE = 10;
+// Adjusted for 3 grids of 10x10 particles each
+const int TOTAL_PARTICLES = GRID_SIZE * GRID_SIZE * 3;
+Particle particles[TOTAL_PARTICLES];
 
 
-// A helper function to convert a vec3 to a string
-std::string vec3_to_string(const glm::vec3& vec) {
-	return "(" + std::to_string(vec.x) + ", " + std::to_string(vec.y) + ", " + std::to_string(vec.z) + ")";
+
+
+void ExplicitEuler(vec3& pos, vec3& vel, float mass, const vec3& accel, const vec3& impulse, float dt)
+{
+	// Apply the impulse to velocity directly. Impulse is force applied over a short time.
+	// Since impulse = force * deltaTime and force = mass * acceleration,
+	// the change in velocity (deltaV) due to impulse can be calculated as impulse / mass.
+	vec3 deltaV = impulse / mass;
+
+	// Update velocity with the effect of the impulse and acceleration
+	vel += deltaV + (accel * dt);
+
+	// Update position based on the new velocity
+	pos += vel * dt;
 }
-
 
 void SymplecticEuler(vec3& pos, vec3& vel, float mass, const vec3& accel, const vec3& impulse, float dt)
 {
-	vel = vel + impulse / mass;
 
+	// Using the integrator, compute the new velocity (vel+1)
 	vel = vel + dt * accel;
 
 	// Using the integrator, compute the new position (pos+1)
@@ -49,71 +52,31 @@ void SymplecticEuler(vec3& pos, vec3& vel, float mass, const vec3& accel, const 
 }
 
 
-vec3 CalculateContactPoint(const RigidBody& rb, const vec3& planeNormal, float planeDistance)
-{
-	// Calculate the distance from the center of the rigid body to the ground plane
-	float distanceToPlane = glm::dot(rb.Position(), planeNormal) - planeDistance;
 
-	// Calculate the contact point by projecting the center of the rigid body onto the ground plane
-	vec3 contactPoint = rb.Position() - distanceToPlane * planeNormal;
-	return contactPoint;
-}
+vec3 GroundCollisionResponse(Particle& particle, float groundY, float coefficientOfRestitution) {
+	glm::vec3 particlePos = particle.Position();
+	glm::vec3 velocity = particle.Velocity();
+	glm::vec3 impulse = glm::vec3(0.0f);
 
-void CheckAndRespondCollision(RigidBody& rb, const vec3& groundNormal, float groundY, float coefficientOfRestitution, float deltaTime) {
-	bool collisionDetected = false;
-	vec3 collisionPoint;
-	float minPenetrationDistance = std::numeric_limits<float>::infinity();
-	vec3 averageContactPoint = vec3(0);
-	int contactPoints = 0;
+	// Check if the particle is below the ground level
+	if (particlePos.y < groundY + PARTICLE_RADIUS) {
+		// Reflect the y component of the velocity
+		velocity.y = -velocity.y * coefficientOfRestitution;
 
-	const auto& meshData = rb.GetMesh()->Data();
-	const auto& modelMatrix = rb.ModelMatrix();
+		// Adjust the particle's position to be on the surface
+		particlePos.y = groundY + PARTICLE_RADIUS;
 
-	// Loop through vertices to find those that are below the ground
-	for (const auto& vertex : meshData.positions.data) {
-		vec4 worldVertex = modelMatrix * vec4(vertex, 1.0f);
-		float distanceToGround = dot(vec3(worldVertex) - vec3(0, groundY, 0), groundNormal);
-
-		if (distanceToGround < 0) { // Vertex is below ground
-			collisionDetected = true;
-			averageContactPoint += vec3(worldVertex);
-			contactPoints++;
-
-			if (distanceToGround < minPenetrationDistance) {
-				minPenetrationDistance = distanceToGround;
-				collisionPoint = vec3(worldVertex);
-			}
-		}
+		// Calculate impulse based on the change in velocity
+		impulse.y = particle.Mass() * (velocity.y - particle.Velocity().y);
 	}
 
-	if (collisionDetected) {
-		// Compute the average contact point for vertices below the ground
-		averageContactPoint /= contactPoints;
+	// Update particle's velocity and position
+	particle.SetVelocity(velocity);
+	particle.SetPosition(particlePos);
 
-		// Adjust position based on the deepest penetration point
-		rb.SetPosition(rb.Position() + vec3(0, -minPenetrationDistance, 0));
-
-		// Reflect velocity for bounce
-		if (rb.Velocity().y < 0) {
-			vec3 velocity = rb.Velocity();
-			velocity.y = -velocity.y * coefficientOfRestitution;
-			rb.SetVelocity(velocity);
-		}
-
-		// Adjust orientation based on the average contact point
-		// This is a simplified approach to simulate the effect of rotation due to uneven ground contact
-		// Note: This part is quite basic and might need more sophisticated logic depending on your requirements
-		vec3 contactOffset = averageContactPoint - rb.Position();
-		float angleAdjustment = length(contactOffset) * 0.05f; // Simplified rotational effect
-		vec3 angularAdjustment = normalize(cross(contactOffset, groundNormal)) * angleAdjustment;
-		rb.SetAngularVelocity(rb.AngularVelocity() + angularAdjustment);
-
-
-		if (shouldPrint) {
-			cout << "Collision detected and handled. New position: " << vec3_to_string(rb.Position()) << ", New Angular Velocity: " << vec3_to_string(rb.AngularVelocity()) << "\n";
-		}
-	}
+	return impulse;
 }
+
 
 
 void UpdateAngularIntegration(RigidBody& rb, float deltaTime) {
@@ -126,36 +89,6 @@ void UpdateAngularIntegration(RigidBody& rb, float deltaTime) {
 	R = glm::orthonormalize(R);
 
 	rb.SetOrientation(glm::mat4(R));
-	if (shouldPrint) {
-		cout << "Angular Integration: New angular velocity set to " << vec3_to_string(newAngVel) << endl;
-	}
-}
-
-void PerformFixedTimeStepIntegration(float deltaTime) {
-	for (int i = 0; i < 1; ++i) {
-		rbody[i].ClearForcesImpulses();
-		CheckAndRespondCollision(rbody[i], vec3(0, 1, 0), GROUND_Y, 0.9f, deltaTime);
-	}
-}
-
-
-void SymplecticEulerIntegration(RigidBody& rb, float deltaTime) {
-	// Get the current state of the particle
-	vec3 p = rb.Position();
-	vec3 v = rb.Velocity();
-	vec3 acceleration = rb.AccumulatedForce() / rb.Mass();
-
-	// Use the Symplectic Euler to update velocity and position
-	SymplecticEuler(p, v, rb.Mass(), acceleration, vec3(0.0f), deltaTime);
-
-	// Apply the updated state back to the particle
-	rb.SetPosition(p); 
-	rb.SetVelocity(v); 
-
-	if (shouldPrint) {
-		cout << "Symplectic Euler Integration: Position updated to " << vec3_to_string(p)
-			<< " and velocity updated to " << vec3_to_string(v) << endl;
-	}
 }
 
 
@@ -166,129 +99,129 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 	// Get a few meshes/shaders from the databases
 	auto defaultShader = shaderDb.Get("default");
 	auto groundMesh = meshDb.Get("plane");
-	auto cubeMesh = meshDb.Get("cube");
+	auto sphereMesh = meshDb.Get("sphere");
+
 
 	meshDb.Add("cube", Mesh(MeshDataFromWavefrontObj("resources/models/cube.obj")));
 	meshDb.Add("sphere", Mesh(MeshDataFromWavefrontObj("resources/models/sphere.obj")));
 	meshDb.Add("cone", Mesh(MeshDataFromWavefrontObj("resources/models/cone.obj")));
-	auto mesh = meshDb.Get("cube");
+	auto mesh = meshDb.Get("sphere");
 
 	//distanc ebetween particles
-	float separation = 0.5f;
+	//float separation = 0.5f;
 
 	// Initialise ground
 	ground.SetMesh(groundMesh);
 	ground.SetShader(defaultShader);
-	ground.SetScale(vec3(10.0f));
+	ground.SetScale(vec3(30.0f));
 	ground.SetPosition(vec3(0.0f, 0.0f, 0.0f));
 
-	// Initialize two particles
-	rbody[0].SetMesh(mesh);
-	rbody[0].SetShader(defaultShader);
-	rbody[0].SetColor(vec4(1, 0, 0, 1));
-	rbody[0].SetPosition(vec3(0.0f, 5.0f, 0.0f));
-	rbody[0].SetScale(vec3(1, 3, 1));
-	//rbody[0].SetVelocity(vec3(0.0f, 0.0f, 0.0f));
-	rbody[0].SetMass(1.0f);
-	//rbody[0].SetAngularVelocity(glm::vec3(0.0f, 0.0f, 0.0f)); // Example angular velocity 
+	// Initialise cube
+	sphere.SetMesh(sphereMesh);
+	sphere.SetShader(defaultShader);
+	sphere.SetScale(vec3(1.0f));  // Adjust the cube to match the ground's scale
+	sphere.SetPosition(vec3(0.0f, 0.0f, 0.0f));  // Center the cube at the same position as the ground
 
-	//vec3 gravityVelocityChange = GRAVITY;
-		// Directly set a constant velocity and angular velocity for the first rigid body
-	rbody[0].SetVelocity(vec3(1, 0, 0)); // Apply a constant velocity of 3 units/s upwards
-	rbody[0].SetAngularVelocity(vec3(0, 0, 1)); // Apply a constant angular rotation around the Z-axis
+	srand(static_cast<unsigned int>(time(0)));
+
+	// Sphere type definitions
+	vec4 colors[] = { vec4(1, 0, 0, 1), vec4(0, 1, 0, 1), vec4(0, 0, 1, 1) };
+	float masses[] = { 1.0f, 2.0f, 3.0f };
+	const float PARTICLE_RADIUS = 1.0f; // Sphere radius
+
+	// Plane boundaries for random spawning
+	float minX = -15.0f, maxX = 15.0f;
+	float minZ = -15.0f, maxZ = 15.0f;
+	float initialY = 0.1f; // Slightly above the plane to ensure they are visible
+
+	for (int i = 0; i < TOTAL_PARTICLES; ++i) {
+		// Randomly pick a type
+		int type = rand() % 3;
+
+		// Generate random positions within the plane boundaries
+		float posX = minX + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (maxX - minX)));
+		float posZ = minZ + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (maxZ - minZ)));
+
+		particles[i].SetMesh(meshDb.Get("sphere"));
+		particles[i].SetShader(shaderDb.Get("default"));
+		particles[i].SetColor(colors[type]);
+		particles[i].SetScale(vec3(PARTICLE_RADIUS));
+		particles[i].SetPosition(vec3(posX, initialY, posZ));
+		particles[i].SetVelocity(vec3(0.0f));
+		particles[i].SetMass(masses[type]);
+	}
 
 
-	// TODO: Get the mesh and shader for rigidy body
-	camera = Camera(vec3(0, 5, 15));
+
+	camera = Camera(vec3(5, 10, 20));
 }
 
 
+
+
 // This is called every frame
-void PhysicsEngine::Update(float deltaTime, float totalTime)
-{
+void PhysicsEngine::Update(float deltaTime, float totalTime) {
 	static double accumulator = 0.0;
 	const double fixedDeltaTime = 0.016; // 16ms for a 60Hz update rate 
-	float coefficientOfRestitution = 0.1f;
-	float frictionCoefficient = 0.5f; // Example coefficient
-	vec3 impulse = rbody[0].Mass() * GRAVITY * deltaTime;
-	vec3 contactPoint = rbody[0].Position() -vec3(0, rbody[0].Scale().y / 2, 0); 
+
+
+	float kd = 0.1f; // Damping constant 
+
 
 	accumulator += deltaTime;
 
 	while (accumulator >= fixedDeltaTime) {
-
-		
-		// Loop through all rigid bodies and apply the physics simulation steps
-		for (int i = 0; i < 1; ++i) {
-			rbody[i].ClearForcesImpulses();
-
-			Force::Gravity(rbody[i]);  
-			
-			SymplecticEulerIntegration(rbody[i], fixedDeltaTime); // Integrate motion equations
-			UpdateAngularIntegration(rbody[i], fixedDeltaTime);
-			CheckAndRespondCollision(rbody[i], vec3(0, 1, 0), GROUND_Y, coefficientOfRestitution, fixedDeltaTime);
-			rbody[i].ApplyFriction(impulse, contactPoint, frictionCoefficient, fixedDeltaTime);
+		// Clear forces and impulses for all particles
+		for (int i = 0; i < GRID_SIZE * GRID_SIZE; ++i) {
+			Force::Gravity(particles[i]);
 		}
 
-		accumulator -= fixedDeltaTime; // Decrease accumulated time
-	}
-	// Check if the object has come to rest
-	bool allResting = true;
-	for (int i = 0; i < 1; ++i) {
-		if (glm::length(rbody[i].Velocity()) > 0.01f || glm::length(rbody[i].AngularVelocity()) > 0.01f) { // Adjust the threshold as needed
-			allResting = false;
-			break;
-		}
-	}
 
-	if (allResting) {
-		// Set both linear and angular velocities to zero to stop the object from moving
-		for (int i = 0; i < 1; ++i) {
-			rbody[i].SetVelocity(vec3(0.0f));
-			rbody[i].SetAngularVelocity(vec3(0.0f));
-			rbody[i].ClearForcesImpulses();
+
+		// Symplectic Euler integration using SetPosition and SetVelocity
+		for (int i = 0; i < GRID_SIZE * GRID_SIZE; ++i) {
+			// Get the current state of the particle
+			vec3 p = particles[i].Position();
+			vec3 v = particles[i].Velocity();
+			vec3 acceleration = particles[i].AccumulatedForce() / particles[i].Mass();
+
+			// Use the Symplectic Euler to update velocity and position
+			SymplecticEuler(p, v, particles[i].Mass(), acceleration, vec3(0.0f), fixedDeltaTime);
+
+			// Apply the updated state back to the particle
+			particles[i].SetPosition(p);
+			particles[i].SetVelocity(v);
+
+			// Handle ground collision response or other interactions as necessary
+			GroundCollisionResponse(particles[i], 0.0f, 0.9f);
 		}
+
+
+
+		accumulator -= fixedDeltaTime;
 	}
-	
 }
-			
+
+
+
 
 
 // This is called every frame, after Update
 void PhysicsEngine::Display(const mat4& viewMatrix, const mat4& projMatrix)
 {
-	for (int i = 0; i < 1; i++) {
-		rbody[i].Draw(viewMatrix, projMatrix);
+
+	for (int i = 0; i < 100; i++) {
+		particles[i].Draw(viewMatrix, projMatrix);
 	}
 
 	ground.Draw(viewMatrix, projMatrix);
 }
 
-
-// This is called every frame, after Update
 void PhysicsEngine::HandleInputKey(int keyCode, bool pressed)
 {
-	//if (!pressed) return; // Only handle keydown events
-	
-	// Determine if the scenario changes based on the keyCode,
-	 //and reset all flags to false if it does.
-	//int prevScenario = scenario;
-	//switch (keyCode) {
-	//case '0': scenario = 0; break;
-	//case '1': scenario = 1; break;
-	//case '2': scenario = 2; break;
-	//case '3': scenario = 3; break;
-	//case '4': scenario = 4; break;
-	
-		// Add more cases as needed...
-	//}
-
-	// //If the scenario has changed, reset all applied flags
-	//if (prevScenario != scenario) { 
-	//	fill(begin(scenarioApplied), end(scenarioApplied), false); // Reset all flags 
-	//	fill(begin(forceApplied), end(forceApplied), false); // Reset force application flags 
-	//
-	//}
+	switch (keyCode)
+	{
+	default:
+		break;
+	}
 }
-
-

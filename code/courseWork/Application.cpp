@@ -176,6 +176,7 @@ void Application::MainLoop() {
 	// Prepare some time bookkeeping
 	const GLfloat timeStart = (GLfloat)glfwGetTime(); 
 	GLfloat lastFrameTimeSinceStart = 0.0f;
+	 
 
 	while (!glfwWindowShouldClose(m_window))
 	{
@@ -187,6 +188,13 @@ void Application::MainLoop() {
 
 		// save the current time since start to the previous time since start, so that we can calculate the elapsed time between the different frames
 		lastFrameTimeSinceStart = timeSinceStart;
+
+		accumulator += deltaTime; 
+
+		while (accumulator >= fixedDeltaTime) {
+			m_physEngine.Update(fixedDeltaTime); // Update physics with a fixed time step
+			accumulator -= fixedDeltaTime;
+		}
 
 		// poll input events
 		glfwPollEvents();

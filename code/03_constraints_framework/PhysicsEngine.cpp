@@ -2,16 +2,20 @@
 #include "Application.h"
 #include "Camera.h"
 #include "Force.h"
+#include <cstdlib> // For rand() and srand()
+#include <ctime>   // For time()
 
 using namespace glm;
 
 const glm::vec3 GRAVITY = glm::vec3(0, -9.81, 0);
 
 // PARTICLE_RADIUS 
-const float PARTICLE_RADIUS = 0.1f; // Adjustable as needed
+const float PARTICLE_RADIUS = 1.0f; // Adjustable as needed
 
 const int GRID_SIZE = 10; 
-Particle particles[GRID_SIZE * GRID_SIZE]; 
+// Adjusted for 3 grids of 10x10 particles each
+const int TOTAL_PARTICLES = GRID_SIZE * GRID_SIZE * 3; 
+Particle particles[TOTAL_PARTICLES]; 
 
 void ExplicitEuler(vec3& pos, vec3& vel, float mass, const vec3& accel, const vec3& impulse, float dt)
 {
@@ -76,13 +80,13 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 	// Get a few meshes/shaders from the databases
 	auto defaultShader = shaderDb.Get("default");
 	auto groundMesh = meshDb.Get("plane");
-	auto cubeMesh = meshDb.Get("cube");
+	auto sphereMesh = meshDb.Get("sphere");
 
 
 	meshDb.Add("cube", Mesh(MeshDataFromWavefrontObj("resources/models/cube.obj")));
 	meshDb.Add("sphere", Mesh(MeshDataFromWavefrontObj("resources/models/sphere.obj")));
 	meshDb.Add("cone", Mesh(MeshDataFromWavefrontObj("resources/models/cone.obj")));
-	auto mesh = meshDb.Get("cube");
+	auto mesh = meshDb.Get("sphere");
 
 	//distanc ebetween particles
 	//float separation = 0.5f;
@@ -90,140 +94,58 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 	// Initialise ground
 	ground.SetMesh(groundMesh);
 	ground.SetShader(defaultShader);
-	ground.SetScale(vec3(10.0f));
-	ground.SetPosition(vec3(4.0f, -10.0f, 5.0f));
+	ground.SetScale(vec3(30.0f));
+	ground.SetPosition(vec3(0.0f, 0.0f, 0.0f));
 
 	// Initialise cube
-	cube.SetMesh(cubeMesh);
+	cube.SetMesh(sphereMesh);
 	cube.SetShader(defaultShader);
 	cube.SetScale(vec3(20.0f));  // Adjust the cube to match the ground's scale
 	cube.SetPosition(vec3(0.0f, 0.0f, 0.0f));  // Center the cube at the same position as the ground
 
-	float separation = 1.0f;  // Separation between particles in the grid
+	srand(static_cast<unsigned int>(time(0)));
 
-	float initialHeight = 5.0f; // Set all particles to this height to make the grid horizontal
+	// Sphere type definitions
+	vec4 colors[] = { vec4(1, 0, 0, 1), vec4(0, 1, 0, 1), vec4(0, 0, 1, 1) };
+	float masses[] = { 1.0f, 2.0f, 3.0f };
+	const float PARTICLE_RADIUS = 1.0f; // Sphere radius
 
-	for (int y = 0; y < GRID_SIZE; ++y) {
-		for (int x = 0; x < GRID_SIZE; ++x) {
-			int index = y * GRID_SIZE + x;
-			particles[index].SetMesh(mesh);
-			particles[index].SetShader(defaultShader);
-			particles[index].SetColor(vec4(1, 0, 0, 1));  // Example color, adjust as needed
-			particles[index].SetScale(vec3(PARTICLE_RADIUS));
+	// Plane boundaries for random spawning
+	float minX = -15.0f, maxX = 15.0f;
+	float minZ = -15.0f, maxZ = 15.0f;
+	float initialY = 0.1f; // Slightly above the plane to ensure they are visible
 
-			// Adjusting Y position to initialHeight to make the grid horizontal
-			particles[index].SetPosition(vec3(x * separation, initialHeight, y * separation)); // Spread out the particles along X and Z axes
+	for (int i = 0; i < TOTAL_PARTICLES; ++i) {
+		// Randomly pick a type
+		int type = rand() % 3;
 
-			particles[index].SetVelocity(vec3(0.0f, 0.0f, 0.0f));
+		// Generate random positions within the plane boundaries
+		float posX = minX + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (maxX - minX)));
+		float posZ = minZ + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (maxZ - minZ)));
 
-			// Make corner particles stationary if needed, depending on your simulation requirements
-			if ((x == 0 || x == GRID_SIZE - 1) && (y == 0 || y == GRID_SIZE - 1)) {
-				particles[index].SetMass(FLT_MAX);
-			}
-			else {
-				particles[index].SetMass(1.0f);
-			}
-		}
+		particles[i].SetMesh(meshDb.Get("sphere"));
+		particles[i].SetShader(shaderDb.Get("default"));
+		particles[i].SetColor(colors[type]);
+		particles[i].SetScale(vec3(PARTICLE_RADIUS));
+		particles[i].SetPosition(vec3(posX, initialY, posZ));
+		particles[i].SetVelocity(vec3(0.0f));
+		particles[i].SetMass(masses[type]);
 	}
+
 
 
 	camera = Camera(vec3(5, 10, 20));
 }
 
-void PhysicsEngine::Task1Init()
-{
-	// Clear any existing forces and impulses
-	for (int i = 0; i < 10; ++i) {
-		particles[i].ClearForcesImpulses();
-	}
-
-	// Set mass for all particles
-	// The first particle is stationary with infinite mass
-	particles[0].SetMass(FLT_MAX);
-	particles[10].SetMass(FLT_MAX); // Making the 11th particle also stationary 
-	//float separation = 1.0f;  
-
-	// Normal mass for other particles
-	for (int i = 1; i < 10; ++i) {
-		particles[i].SetMass(1.0f);
-	}
-
-	// Set initial velocity to zero for all particles
-	for (int i = 0; i < 10; ++i) {
-		particles[i].SetVelocity(vec3(0.0f, 0.0f, 0.0f));
-	}
-
-	
-}
 
 
-void PhysicsEngine::Task1Update(float deltaTime, float totalTime)
-{
-
-	// Define wind properties
-	glm::vec3 windDirection = glm::vec3(0.0f, 15.0f, 0.0f); // Wind blowing upwards 
-	float windStrength = 20.0f; // Adjust the strength as needed
-
-
-	// Clear forces and impulses for all particles 
-	for (int i = 0; i < GRID_SIZE * GRID_SIZE; ++i) {
-		particles[i].ClearForcesImpulses();
-	}
-
-
-
-	// Apply Hooke's law between each consecutive pair of particles
-	float restLength = 1.0f; // Desired separation distance
-	float ks = 50.0f; // Spring constant
-	float kd = 0.1f; // Damping constant
-	// Apply forces
-	for (int y = 0; y < GRID_SIZE; ++y) {
-		for (int x = 0; x < GRID_SIZE; ++x) {
-			int index = y * GRID_SIZE + x;
-			// Apply gravity to all but corner particles
-			if (!(x == 0 || x == GRID_SIZE - 1) || !(y == 0 || y == GRID_SIZE - 1)) {
-				Force::Gravity(particles[index]);
-			}
-
-			// Apply wind force to all particles
-			ApplyWindForce(particles[index], windDirection, windStrength); 
-
-			// Spring forces with adjacent particles
-			if (x > 0) Force::Hooke(particles[index], particles[index - 1], restLength, ks, kd); // Left
-			if (x < GRID_SIZE - 1) Force::Hooke(particles[index], particles[index + 1], restLength, ks, kd); // Right
-			if (y > 0) Force::Hooke(particles[index], particles[index - GRID_SIZE], restLength, ks, kd); // Up
-			if (y < GRID_SIZE - 1) Force::Hooke(particles[index], particles[index + GRID_SIZE], restLength, ks, kd); // Down
-		}
-	}
-	for (int i = 0; i < GRID_SIZE * GRID_SIZE; ++i) {
-		if (particles[i].Mass() != FLT_MAX) {
-			vec3 force = particles[i].AccumulatedForce();
-			vec3 impulse = particles[i].AccumulatedImpulse();
-			vec3 acceleration = force / particles[i].Mass();
-
-			vec3 newPos = particles[i].Position(); // Temporary position
-			vec3 newVel = particles[i].Velocity(); // Temporary velocity
-
-			// Now update newPos and newVel directly
-			SymplecticEuler(newPos, newVel, particles[i].Mass(), acceleration, impulse, deltaTime);
-
-			particles[i].SetPosition(newPos); // Update the particle's position
-			particles[i].SetVelocity(newVel); // Update the particle's velocity
-		}
-	}
-
-}
-
-float restLength = 1.0f; // The natural length of the spring
-float ks = 50.0f; // Spring constant
-float kd = 0.1f; // Damping constant
 
 // This is called every frame
 void PhysicsEngine::Update(float deltaTime, float totalTime) {
 	static double accumulator = 0.0; 
 	const double fixedDeltaTime = 0.016; // 16ms for a 60Hz update rate 
-	float restLength = 1.0f; // The natural length of the spring 
-	float ks = 50.0f; // Spring constant 
+	
+	
 	float kd = 0.1f; // Damping constant 
 
 
@@ -232,29 +154,10 @@ void PhysicsEngine::Update(float deltaTime, float totalTime) {
 	while (accumulator >= fixedDeltaTime) {
 		// Clear forces and impulses for all particles
 		for (int i = 0; i < GRID_SIZE * GRID_SIZE; ++i) {
-			particles[i].ClearForcesImpulses();
+			Force::Gravity(particles[i]);
 		}
 
-		// Apply gravity and spring forces
-		for (int y = 0; y < GRID_SIZE; ++y) {
-			for (int x = 0; x < GRID_SIZE; ++x) {
-				int index = y * GRID_SIZE + x;
-
-				// Apply gravity if not a corner particle
-				if (!(x == 0 && y == 0) && !(x == GRID_SIZE - 1 && y == 0) &&
-					!(x == 0 && y == GRID_SIZE - 1) && !(x == GRID_SIZE - 1 && y == GRID_SIZE - 1)) {
-					Force::Gravity(particles[index]);
-				}
-
-				// Apply Hooke's law for springs to adjacent particles
-				if (x < GRID_SIZE - 1) { // right
-					Force::Hooke(particles[index], particles[index + 1], 1.0f, 50.0f, 0.1f);
-				}
-				if (y < GRID_SIZE - 1) { // below
-					Force::Hooke(particles[index], particles[index + GRID_SIZE], 1.0f, 50.0f, 0.1f);
-				}
-			}
-		}
+	
 
 		// Symplectic Euler integration using SetPosition and SetVelocity
 		for (int i = 0; i < GRID_SIZE * GRID_SIZE; ++i) {
