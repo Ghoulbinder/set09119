@@ -216,7 +216,7 @@ void Application::MainLoop() {
 		auto view = camera.GetViewMatrix();
 
 		// Update the physics
-		m_physEngine.Update(deltaTime, timeSinceStart);
+		m_physEngine.Update(deltaTime);
 
 		// Draw all the objects in the physics engine
 		m_physEngine.Display(view, projection);
