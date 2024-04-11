@@ -107,35 +107,38 @@ void SymplecticEuler(vec3& pos, vec3& vel, float mass, const vec3& accel, const 
  
 
 // Function to check collision with walls for all particles cube being used is for the ground cube
-vec3 CheckCollision(Particle& particle, const glm::vec3& cubeCentre, float cubeSize, float coefficientOfRestitution) {
+vec3 CheckCollisionWithWalls(Particle& particle, const glm::vec3& cubeCentre, float cubeSize, float coefficientOfRestitution) {
+	// Extract particle properties
 	glm::vec3 particlePos = particle.Position();
 	glm::vec3 velocity = particle.Velocity();
 	glm::vec3 impulse = glm::vec3(0.0f);
-	glm::vec3 cubeHalfExtents = glm::vec3(cubeSize / 2.0f);
+	glm::vec3 cubeHalfExtents = glm::vec3(cubeSize) / 2.0f;
+	coefficientOfRestitution = 0.1f; //  adjust as needed  
 
 	// Check for collision with cube walls
 	for (int i = 0; i < 3; ++i) { // Iterate over x, y, z axes
-		if (particlePos[i] < (cubeCentre[i] - cubeHalfExtents[i])) {
-			particlePos[i] = cubeCentre[i] - cubeHalfExtents[i]; // Correct position
-			if (velocity[i] < 0) { // Only invert velocity if particle is moving towards the wall
-				velocity[i] = -velocity[i] * coefficientOfRestitution;
+		if (particlePos[i] < (cubeCentre[i] - cubeHalfExtents[i]) || particlePos[i] > (cubeCentre[i] + cubeHalfExtents[i])) {
+			// Reflect velocity on the i-th axis
+			velocity[i] = -velocity[i] * coefficientOfRestitution;
+			// Calculate impulse based on change in velocity
+			impulse[i] = particle.Mass() * (velocity[i] - particle.Velocity()[i]);
+
+			// Correct position if out of bounds, to prevent sticking to walls
+			if (particlePos[i] < (cubeCentre[i] - cubeHalfExtents[i])) {
+				particlePos[i] = cubeCentre[i] - cubeHalfExtents[i] + 0.001f;
 			}
-		}
-		else if (particlePos[i] > (cubeCentre[i] + cubeHalfExtents[i])) {
-			particlePos[i] = cubeCentre[i] + cubeHalfExtents[i]; // Correct position
-			if (velocity[i] > 0) { // Only invert velocity if particle is moving towards the wall
-				velocity[i] = -velocity[i] * coefficientOfRestitution;
+			else if (particlePos[i] > (cubeCentre[i] + cubeHalfExtents[i])) {
+				particlePos[i] = cubeCentre[i] + cubeHalfExtents[i] - 0.001f;
 			}
 		}
 	}
 
-	// Update particle's velocity and position with damping to simulate energy loss
+	// Update particle's velocity and position
 	particle.SetVelocity(velocity * dampingFactor);
 	particle.SetPosition(particlePos);
 
-	return impulse; // Currently not used but calculated
+	return impulse;
 }
-
 
 
 
@@ -175,7 +178,7 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 	ground.SetMesh(groundMesh);
 	ground.SetShader(defaultShader);
 	ground.SetScale(vec3(30.0f, 1.0f, 30.0f));
-	ground.SetPosition(vec3(0.0f, -1.0f, 0.0f));//changed the y to -1 so to account for the scale of 1 so the spheres remain on 0
+	ground.SetPosition(vec3(0.0f, 0.0f, 0.0f));//changed the y to -1 so to account for the scale of 1 so the spheres remain on 0
 
 	// Initialise cube
 	sphere.SetMesh(sphereMesh);
@@ -200,19 +203,19 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 		int type = rand() % 3; // Keep the random type if it applies to your simulation
 		// Randomize positions within bounds 
 		float posX = static_cast<float>(rand()) / RAND_MAX * 30.0f - 15.0f; // Random X between -15 and 15
-		float posY = PARTICLE_RADIUS;// to account for the cube centre not being the top surface of the cube
+		float posY = PARTICLE_RADIUS + 1.0f;
 		float posZ = static_cast<float>(rand()) / RAND_MAX * 30.0f - 15.0f; // Random Z between -15 and 15
 
 
 		// Randomize velocities between -20 and 20 m/sec for the x and z axes
-		float velX = static_cast<float>(rand()) / RAND_MAX * 40.0f - 20.0f; // Random velocity X between -20 and 20
-		// Assuming no specific requirement for Y velocity, set to a default or randomize as needed
-		float velY = 0.0f; // Default Y velocity
-		float velZ = static_cast<float>(rand()) / RAND_MAX * 40.0f - 20.0f; // Random velocity Z between -20 and 20
+		//float velX = static_cast<float>(rand()) / RAND_MAX * 40.0f - 20.0f; // Random velocity X between -20 and 20
+		//// Assuming no specific requirement for Y velocity, set to a default or randomize as needed
+		//float velY = 0.0f; // Default Y velocity
+		//float velZ = static_cast<float>(rand()) / RAND_MAX * 40.0f - 20.0f; // Random velocity Z between -20 and 20
 		// Randomize velocities to be between 1 and 3 for each axis
-		//float velX = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; // Random velocity X between 1 and 3
-		//float velY = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; 
-		//float velZ = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; // Random velocity Z between 1 and 3
+		float velX = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; // Random velocity X between 1 and 3
+		float velY = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; 
+		float velZ = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; // Random velocity Z between 1 and 3
 
 		// Setup particle with the random position and velocity
 		Particle& particle = particles[i];
@@ -230,7 +233,7 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 
 
 
-	camera = Camera(vec3(5, 10, 20));
+	camera = Camera(vec3(10, 30, 50));
 }
 
 
@@ -268,7 +271,7 @@ void PhysicsEngine::Update(const float deltaTime) {
 		}
 
 		// Check and handle collision with the cube's walls
-		CheckCollision(p, cubeCentre, cubeSize, coefficientOfRestitution);
+		CheckCollisionWithWalls(p, cubeCentre, cubeSize, coefficientOfRestitution);
 
 		// Finalize updates
 		p.SetPosition(pos);
