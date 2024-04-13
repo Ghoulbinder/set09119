@@ -288,7 +288,52 @@ void PhysicsEngine::Update(const float deltaTime) {
 		p.SetPosition(pos);
 		p.SetVelocity(vel);
 	}
-	// Iterate over each particle to update their physics state
+
+	for (int i = 0; i < TOTAL_PARTICLES; i++) {
+		Particle& p = particles[i];
+		glm::vec3 position = p.Position();
+		glm::vec3 velocity = p.Velocity();
+
+		// Check collisions with other particles
+		for (int j = i + 1; j < TOTAL_PARTICLES; j++) {
+			Particle& q = particles[j];
+			glm::vec3 position2 = q.Position();
+			glm::vec3 velocity2 = q.Velocity();
+
+			glm::vec3 displacement = position2 - position;
+			float distance = glm::length(displacement);
+			float combinedRadius = PARTICLE_RADIUS * 2;
+
+			if (distance < combinedRadius) { // Collision detected
+				glm::vec3 normal = glm::normalize(displacement);
+				float penetration = combinedRadius - distance;
+
+				// Calculate new velocities using the coefficient of restitution
+				glm::vec3 relativeVelocity = velocity2 - velocity;
+				float velocityAlongNormal = glm::dot(relativeVelocity, normal);
+				if (velocityAlongNormal > 0) continue;
+
+				float e = coefficientOfRestitution;
+				float impulseMagnitude = -(1 + e) * velocityAlongNormal;
+				impulseMagnitude /= (1 / p.Mass() + 1 / q.Mass());
+
+				glm::vec3 impulse = impulseMagnitude * normal;
+
+				velocity -= impulse / p.Mass();
+				velocity2 += impulse / q.Mass();
+
+				// Position correction to prevent sinking due to floating point precision issues
+				glm::vec3 correction = (penetration / (1 / p.Mass() + 1 / q.Mass())) * normal;
+				position += correction / (2 * p.Mass());
+				position2 -= correction / (2 * q.Mass());
+			}
+
+			q.SetPosition(position2);
+			q.SetVelocity(velocity2);
+		}
+
+	}
+	 //wall collision Iterate over each particle to update their physics state with 
 	for (int i = 0; i < TOTAL_PARTICLES; i++) {
 		Particle& p = particles[i];
 		glm::vec3 position = p.Position();
