@@ -29,19 +29,6 @@ const float dampingFactor = 0.95f; // Adjust as needed
 bool shouldPrint = true; // Set to false to disable printing
 
 
-void ExplicitEuler(vec3& pos, vec3& vel, float mass, const vec3& accel, const vec3& impulse, float dt)
-{
-	// Apply the impulse to velocity directly. Impulse is force applied over a short time.
-	// Since impulse = force * deltaTime and force = mass * acceleration,
-	// the change in velocity (deltaV) due to impulse can be calculated as impulse / mass.
-	vec3 deltaV = impulse / mass;
-
-	// Update velocity with the effect of the impulse and acceleration
-	vel += deltaV + (accel * dt);
-
-	// Update position based on the new velocity
-	pos += vel * dt;
-}
 
 void SymplecticEuler(vec3& pos, vec3& vel, float mass, const vec3& accel, const vec3& impulse, float dt)
 {
@@ -52,99 +39,6 @@ void SymplecticEuler(vec3& pos, vec3& vel, float mass, const vec3& accel, const 
 	// Using the integrator, compute the new position (pos+1)
 	pos = pos + dt * vel;
 }
-
-//void applyImpulse(Particle& particle1, Particle& particle2, const vec3& pointOfImpact, const vec3& impulse) {
-//	// Calculate the r vectors from the center of mass to the point of impact for each object
-//	vec3 r1 = pointOfImpact - particle1.Position();
-//	vec3 r2 = pointOfImpact - particle2.Position();
-//
-//	// Update linear velocities
-//	vec3 v1_prime = particle1.Velocity() + impulse / particle1.Mass();
-//	vec3 v2_prime = particle2.Velocity() - impulse / particle2.Mass(); // Assuming impulse acts in opposite direction for object2
-//
-//	particle1.SetVelocity(v1_prime);
-//	particle2.SetVelocity(v2_prime);
-//
-//	// Calculate the torque and update angular velocities
-//	vec3 torque1 = cross(r1, impulse);
-//	vec3 torque2 = cross(r2, -impulse); // Torque in opposite direction for the second object
-//
-//	// Assuming we have functions to convert torque to angular velocity change
-//	vec3 angularVelocityChange1 = particle1.InverseInertia() * torque1;
-//	vec3 angularVelocityChange2 = particle2.InverseInertia() * torque2;
-//
-//	particle1.SetAngularVelocity(particle1.AngularVelocity() + angularVelocityChange1);
-//	particle2.SetAngularVelocity(object2.AngularVelocity() + angularVelocityChange2);
-//}
-
-
-
-// Function to handle ground collision without calculating or returning an impulse
-//void GroundCollisionResponse(Particle& particle, const glm::vec3& cubeCentre, float cubeSize, float coefficientOfRestitution) {
-//	glm::vec3 particlePos = particle.Position();  // Get the current position of the particle
-//	glm::vec3 velocity = particle.Velocity();     // Get the current velocity of the particle
-//
-//	// Calculate the Y position of the top surface using the center and half the size
-//	float topSurfaceY = cubeCentre.y + cubeSize / 2.0;
-//
-//	// Check if the particle is below the top surface
-//	if (particlePos.y > topSurfaceY) {
-//		// Reflect the y component of the velocity to simulate a bounce
-//		velocity.y = -velocity.y * coefficientOfRestitution;
-//
-//		// Adjust the particle's position to be exactly on the top surface, preventing it from going through
-//		particlePos.y = topSurfaceY - PARTICLE_RADIUS;
-//
-//		// Apply damping to the velocity to simulate energy loss in a real-world scenario
-//		velocity *= dampingFactor;
-//	}
-//
-//	// Update the particle's velocity and position
-//	particle.SetVelocity(velocity);
-//	particle.SetPosition(particlePos);
-//}
-
- 
-
-//vec3 CheckCollisionWithWalls(Particle& particle, const glm::vec3& cubeCentre, float cubeSize, float coefficientOfRestitution) {
-//	// Extract particle properties
-//	glm::vec3 particlePos = particle.Position();
-//	glm::vec3 velocity = particle.Velocity();
-//	glm::vec3 impulse = glm::vec3(0.0f);
-//	glm::vec3 cubeHalfExtents = glm::vec3(cubeSize) / 2.0f;
-//
-//	// Check for collision with the top surface walls (x and z axes only)
-//	for (int i = 0; i < 3; ++i) {
-//		if (i != 1) { // Skip y-axis
-//			float minBound = cubeCentre[i] - cubeHalfExtents[i];
-//			float maxBound = cubeCentre[i] + cubeHalfExtents[i];
-//
-//			if (particlePos[i] < minBound) {
-//				float penetration = minBound - particlePos[i];
-//				velocity[i] = -velocity[i] * coefficientOfRestitution;
-//				impulse[i] = particle.Mass() * (velocity[i] - particle.Velocity()[i]);
-//				particlePos[i] += penetration + 0.001f;  // Adjust slightly to avoid sticking
-//			}
-//			else if (particlePos[i] > maxBound) {
-//				float penetration = particlePos[i] - maxBound;
-//				velocity[i] = -velocity[i] * coefficientOfRestitution;
-//				impulse[i] = particle.Mass() * (velocity[i] - particle.Velocity()[i]);
-//				particlePos[i] -= penetration + 0.001f;  // Adjust slightly to avoid sticking
-//			}
-//		}
-//	}
-//
-//	// Update particle's velocity and position
-//	particle.SetVelocity(velocity);
-//	particle.SetPosition(particlePos);
-//
-//	return impulse;
-//}
-
-
-
-
-
 
 
 void UpdateAngularIntegration(RigidBody& rb, float deltaTime) {
@@ -158,6 +52,7 @@ void UpdateAngularIntegration(RigidBody& rb, float deltaTime) {
 
 	rb.SetOrientation(glm::mat4(R));
 }
+
 
 
 
@@ -181,7 +76,7 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 	ground.SetMesh(groundMesh);
 	ground.SetShader(defaultShader);
 	ground.SetScale(vec3(30.0f, 1.0f, 30.0f));
-	ground.SetPosition(vec3(0.0f, 0.0f, 0.0f));//changed the y to -1 so to account for the scale of 1 so the spheres remain on 0
+	ground.SetPosition(vec3(0.0f, -1.0f, 0.0f));//changed the y to -1 so to account for the scale of 1 so the spheres remain on 0
 
 	// Initialise cube
 	sphere.SetMesh(sphereMesh);
@@ -211,14 +106,14 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 
 
 		// Randomize velocities between -20 and 20 m/sec for the x and z axes
-		//float velX = static_cast<float>(rand()) / RAND_MAX * 40.0f - 20.0f; // Random velocity X between -20 and 20
-		//// Assuming no specific requirement for Y velocity, set to a default or randomize as needed
-		//float velY = 0.0f; // Default Y velocity
-		//float velZ = static_cast<float>(rand()) / RAND_MAX * 40.0f - 20.0f; // Random velocity Z between -20 and 20
+		float velX = static_cast<float>(rand()) / RAND_MAX * 40.0f - 20.0f; // Random velocity X between -20 and 20
+		// Assuming no specific requirement for Y velocity, set to a default or randomize as needed
+		float velY = 0.0f; // Default Y velocity
+		float velZ = static_cast<float>(rand()) / RAND_MAX * 40.0f - 20.0f; // Random velocity Z between -20 and 20
 		// Randomize velocities to be between 1 and 3 for each axis
-		float velX = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; // Random velocity X between 1 and 3
-		float velY = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; 
-		float velZ = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; // Random velocity Z between 1 and 3
+		//float velX = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; // Random velocity X between 1 and 3
+		//float velY = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; 
+		//float velZ = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; // Random velocity Z between 1 and 3
 
 		// Setup particle with the random position and velocity
 		Particle& particle = particles[i];
@@ -240,12 +135,50 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 }
 
 
+void PhysicsEngine::Task1Init() {
+	static unsigned int seed = static_cast<unsigned int>(time(nullptr)); // Initialize with current time
+	static std::default_random_engine generator(seed); // Maintain generator state across calls
+
+	// Example: Initializing particles with positions and velocities
+	std::uniform_real_distribution<float> positionDist(-15.0f, 15.0f);
+	std::uniform_real_distribution<float> velocityDist(-20.0f, 20.0f);
+
+	for (Particle& particle : particles) {
+		glm::vec3 pos(positionDist(generator), positionDist(generator), positionDist(generator));
+		glm::vec3 vel(velocityDist(generator), velocityDist(generator), velocityDist(generator));
+		particle.SetPosition(pos);
+		particle.SetVelocity(vel);
+	}
+
+}
+
+void PhysicsEngine::Task1Update(float deltaTime, float totalTime){
+	// Handle particle updates, collisions, etc.
+	// Optionally, check for a condition to reset with the same or a new seed
+	if (needReset) {
+		bool useNewSeed = determineIfNewSeedIsRequired();
+		if (useNewSeed) {
+			// Re-seed the generator
+			static_cast<std::default_random_engine*>(nullptr)->seed(static_cast<unsigned int>(time(nullptr)));
+		}
+		Task1Init(); // Reinitialize particles with the new or same seed
+	}
+
+
+
+}
+bool PhysicsEngine::determineIfNewSeedIsRequired() {
+	// Reset the seed if more than 100 seconds have elapsed or 
+	// if the user has requested a seed reset.
+	return elapsedTime > 100.0f || needReset;
+}
 
 
 // This is called every frame
 // This should be called every fixed time step, e.g., 0.016 seconds for 60Hz
 ///CHECK WITH BABIS IF I SHOULD USE DELTATIME INSTEAD OF FIXEDdELTATIME IN UPDATE LOOP
 void PhysicsEngine::Update(const float deltaTime) {
+	elapsedTime += deltaTime;  // Keep track of the elapsed time 
 	// Define properties of the environment
 	const glm::vec3 cubeCentre = glm::vec3(0.0f, 0.0f, 0.0f); // Centre of the cube
 	float cubeSize = 60.0f; // Cube extends in the y-axis, represents half the total height
@@ -400,16 +333,15 @@ void PhysicsEngine::Display(const mat4& viewMatrix, const mat4& projMatrix)
 void PhysicsEngine::HandleInputKey(int keyCode, bool pressed)
 {
 	if (pressed) {
-		//switch (keyCode) {
-		//case 'R': // Restart with the same seed
-		//	Init(camera, meshDb, shaderDb);
-		//	break;
-		//case 'U': // Restart with a new seed
-		//	srand(static_cast<unsigned int>(time(0)) + 1);
-		//	Init(camera, meshDb, shaderDb);
-		//	break;
-		//default:
-		//	break;
-		//}
+		switch (keyCode) {
+		case 'R': // Restart with the same seed
+			needReset = true;
+			useNewSeed = false;
+			break;
+		case 'U': // Restart with a new seed
+			needReset = true;
+			useNewSeed = true;
+			break;
+		}
 	}
 }
