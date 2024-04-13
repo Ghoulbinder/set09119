@@ -106,39 +106,42 @@ void SymplecticEuler(vec3& pos, vec3& vel, float mass, const vec3& accel, const 
 
  
 
-// Function to check collision with walls for all particles cube being used is for the ground cube
-vec3 CheckCollisionWithWalls(Particle& particle, const glm::vec3& cubeCentre, float cubeSize, float coefficientOfRestitution) {
-	// Extract particle properties
-	glm::vec3 particlePos = particle.Position();
-	glm::vec3 velocity = particle.Velocity();
-	glm::vec3 impulse = glm::vec3(0.0f);
-	glm::vec3 cubeHalfExtents = glm::vec3(cubeSize) / 2.0f;
-	coefficientOfRestitution = 0.1f; //  adjust as needed  
+//vec3 CheckCollisionWithWalls(Particle& particle, const glm::vec3& cubeCentre, float cubeSize, float coefficientOfRestitution) {
+//	// Extract particle properties
+//	glm::vec3 particlePos = particle.Position();
+//	glm::vec3 velocity = particle.Velocity();
+//	glm::vec3 impulse = glm::vec3(0.0f);
+//	glm::vec3 cubeHalfExtents = glm::vec3(cubeSize) / 2.0f;
+//
+//	// Check for collision with the top surface walls (x and z axes only)
+//	for (int i = 0; i < 3; ++i) {
+//		if (i != 1) { // Skip y-axis
+//			float minBound = cubeCentre[i] - cubeHalfExtents[i];
+//			float maxBound = cubeCentre[i] + cubeHalfExtents[i];
+//
+//			if (particlePos[i] < minBound) {
+//				float penetration = minBound - particlePos[i];
+//				velocity[i] = -velocity[i] * coefficientOfRestitution;
+//				impulse[i] = particle.Mass() * (velocity[i] - particle.Velocity()[i]);
+//				particlePos[i] += penetration + 0.001f;  // Adjust slightly to avoid sticking
+//			}
+//			else if (particlePos[i] > maxBound) {
+//				float penetration = particlePos[i] - maxBound;
+//				velocity[i] = -velocity[i] * coefficientOfRestitution;
+//				impulse[i] = particle.Mass() * (velocity[i] - particle.Velocity()[i]);
+//				particlePos[i] -= penetration + 0.001f;  // Adjust slightly to avoid sticking
+//			}
+//		}
+//	}
+//
+//	// Update particle's velocity and position
+//	particle.SetVelocity(velocity);
+//	particle.SetPosition(particlePos);
+//
+//	return impulse;
+//}
 
-	// Check for collision with cube walls
-	for (int i = 0; i < 3; ++i) { // Iterate over x, y, z axes
-		if (particlePos[i] < (cubeCentre[i] - cubeHalfExtents[i]) || particlePos[i] > (cubeCentre[i] + cubeHalfExtents[i])) {
-			// Reflect velocity on the i-th axis
-			velocity[i] = -velocity[i] * coefficientOfRestitution;
-			// Calculate impulse based on change in velocity
-			impulse[i] = particle.Mass() * (velocity[i] - particle.Velocity()[i]);
 
-			// Correct position if out of bounds, to prevent sticking to walls
-			if (particlePos[i] < (cubeCentre[i] - cubeHalfExtents[i])) {
-				particlePos[i] = cubeCentre[i] - cubeHalfExtents[i] + 0.001f;
-			}
-			else if (particlePos[i] > (cubeCentre[i] + cubeHalfExtents[i])) {
-				particlePos[i] = cubeCentre[i] + cubeHalfExtents[i] - 0.001f;
-			}
-		}
-	}
-
-	// Update particle's velocity and position
-	particle.SetVelocity(velocity * dampingFactor);
-	particle.SetPosition(particlePos);
-
-	return impulse;
-}
 
 
 
@@ -245,11 +248,19 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 void PhysicsEngine::Update(const float deltaTime) {
 	// Define properties of the environment
 	const glm::vec3 cubeCentre = glm::vec3(0.0f, 0.0f, 0.0f); // Centre of the cube
-	float cubeSize = 10.0f; // Cube extends in the y-axis, represents half the total height
+	float cubeSize = 60.0f; // Cube extends in the y-axis, represents half the total height
 	float coefficientOfRestitution = 0.9f; // Bounciness of the cube's walls
+	glm::vec3 cubeHalfExtents = glm::vec3(cubeSize) / 2.0f;  
 
 	// Simplified drag constant for the simulation
 	float k = 0.02f;
+
+	// Bounds for walls around the top side of the cuboid
+	float top = cubeCentre.y + cubeHalfExtents.y;
+	float minX = cubeCentre.x - cubeHalfExtents.x;
+	float maxX = cubeCentre.x + cubeHalfExtents.x;
+	float minZ = cubeCentre.z - cubeHalfExtents.z;
+	float maxZ = cubeCentre.z + cubeHalfExtents.z;
 
 	// Iterate over each particle to update their physics state
 	for (int i = 0; i < TOTAL_PARTICLES; i++) {
@@ -271,11 +282,56 @@ void PhysicsEngine::Update(const float deltaTime) {
 		}
 
 		// Check and handle collision with the cube's walls
-		CheckCollisionWithWalls(p, cubeCentre, cubeSize, coefficientOfRestitution);
+		//CheckCollisionWithWalls(p, cubeCentre, cubeSize, coefficientOfRestitution);
 
 		// Finalize updates
 		p.SetPosition(pos);
 		p.SetVelocity(vel);
+	}
+	// Iterate over each particle to update their physics state
+	for (int i = 0; i < TOTAL_PARTICLES; i++) {
+		Particle& p = particles[i];
+		glm::vec3 position = p.Position();
+		glm::vec3 velocity = p.Velocity();
+		glm::vec3 impulse = glm::vec3(0.0f);
+
+		// Check and handle collision with the top surface and the walls
+		if (position.y >= top) { // Collision with the top surface
+			position.y = top; // Correct position to be exactly at the top
+			velocity.y = -velocity.y * coefficientOfRestitution;
+		}
+
+		if (position.x <= minX || position.x >= maxX) { // Collision with x-axis walls
+			velocity.x = -velocity.x * coefficientOfRestitution;
+			if (position.x <= minX) {
+				position.x = minX;
+			}
+			else {
+				position.x = maxX;
+			}
+		}
+
+		if (position.z <= minZ || position.z >= maxZ) { // Collision with z-axis walls
+			velocity.z = -velocity.z * coefficientOfRestitution;
+			if (position.z <= minZ) {
+				position.z = minZ;
+			}
+			else {
+				position.z = maxZ;
+			}
+		}
+
+		// Apply drag force (simplified for this example)
+		glm::vec3 dragForce = -0.02f * glm::length(velocity) * velocity;
+		glm::vec3 acceleration = GRAVITY + dragForce / p.Mass(); // Total acceleration from gravity and drag
+
+		// Update position and velocity using symplectic Euler integration
+		velocity += acceleration * deltaTime;
+		position += velocity * deltaTime;
+
+		// Update particle's position and velocity
+		p.SetPosition(position);
+		p.SetVelocity(velocity);
 	}
 }
 
