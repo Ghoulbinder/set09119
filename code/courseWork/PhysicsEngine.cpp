@@ -21,7 +21,7 @@ const float PARTICLE_RADIUS = 1.0f; // Adjustable as needed
 
 const int GRID_SIZE = 10;
 // Adjusted for 3 grids of 10x10 particles each
-const int TOTAL_PARTICLES = 30;
+const int TOTAL_PARTICLES = 100;
 Particle particles[TOTAL_PARTICLES];
 
 const float dampingFactor = 0.95f; // Adjust as needed 
@@ -75,7 +75,7 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 	// Initialise ground
 	ground.SetMesh(groundMesh);
 	ground.SetShader(defaultShader);
-	ground.SetScale(vec3(30.0f, 1.0f, 30.0f));
+	ground.SetScale(vec3(300.0f, 1.0f, 300.0f));
 	ground.SetPosition(vec3(0.0f, -1.0f, 0.0f));//changed the y to -1 so to account for the scale of 1 so the spheres remain on 0
 
 	// Initialise cube
@@ -131,15 +131,22 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 
 
 
-	camera = Camera(vec3(10, 30, 50));
+	camera = Camera(vec3(10, 300, 300));
 }
 
 
 void PhysicsEngine::Task1Init() {
-	static unsigned int seed = static_cast<unsigned int>(time(nullptr)); // Initialize with current time
-	static std::default_random_engine generator(seed); // Maintain generator state across calls
+	if (useNewSeed) {
+		// Reinitialize the random number generator with a new random seed
+		std::random_device rd;
+		generator.seed(rd());
+	}
+	else {
+		// Reinitialize the random number generator with the current time as the seed
+		generator.seed(static_cast<unsigned int>(std::time(nullptr)));
+	}
 
-	// Example: Initializing particles with positions and velocities
+	// Reinitialize particles using the selected seed
 	std::uniform_real_distribution<float> positionDist(-15.0f, 15.0f);
 	std::uniform_real_distribution<float> velocityDist(-20.0f, 20.0f);
 
@@ -149,8 +156,8 @@ void PhysicsEngine::Task1Init() {
 		particle.SetPosition(pos);
 		particle.SetVelocity(vel);
 	}
-
 }
+
 
 void PhysicsEngine::Task1Update(float deltaTime, float totalTime){
 	// Handle particle updates, collisions, etc.
@@ -189,11 +196,11 @@ void PhysicsEngine::Update(const float deltaTime) {
 	float k = 0.02f;
 
 	// Bounds for walls around the top side of the cuboid
-	float top = cubeCentre.y + cubeHalfExtents.y;
-	float minX = cubeCentre.x - cubeHalfExtents.x;
-	float maxX = cubeCentre.x + cubeHalfExtents.x;
-	float minZ = cubeCentre.z - cubeHalfExtents.z;
-	float maxZ = cubeCentre.z + cubeHalfExtents.z;
+	float top  = cubeCentre.y + cubeHalfExtents.y * 10;
+	float minX = cubeCentre.x - cubeHalfExtents.x * 10;
+	float maxX = cubeCentre.x + cubeHalfExtents.x * 10;
+	float minZ = cubeCentre.z - cubeHalfExtents.z * 10;
+	float maxZ = cubeCentre.z + cubeHalfExtents.z * 10;
 
 	// Iterate over each particle to update their physics state
 	for (int i = 0; i < TOTAL_PARTICLES; i++) {
@@ -335,13 +342,13 @@ void PhysicsEngine::HandleInputKey(int keyCode, bool pressed)
 	if (pressed) {
 		switch (keyCode) {
 		case 'R': // Restart with the same seed
-			needReset = true;
-			useNewSeed = false;
+			Task1Init(); // Reinitialize particles with the same seed
 			break;
-		case 'U': // Restart with a new seed
-			needReset = true;
-			useNewSeed = true;
+		case 'U': // Restart with a new random seed
+			useNewSeed = true; // Set flag to use a new seed
+			Task1Init(); // Reinitialize particles with a new seed
 			break;
+			// Other cases...
 		}
 	}
 }

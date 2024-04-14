@@ -26,6 +26,7 @@ public:
 	
 	bool determineIfNewSeedIsRequired(); 
 	// ... rest of the tasks here
+	PhysicsEngine() : generator(static_cast<unsigned int>(std::time(nullptr))) {}
 
 	
 
