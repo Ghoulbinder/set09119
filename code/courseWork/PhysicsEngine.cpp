@@ -21,14 +21,14 @@ const float PARTICLE_RADIUS = 1.0f; // Adjustable as needed
 
 const int GRID_SIZE = 10;
 // Adjusted for 3 grids of 10x10 particles each
-const int TOTAL_PARTICLES = 100;
+const int TOTAL_PARTICLES = 1000;
 Particle particles[TOTAL_PARTICLES];
 
 const float dampingFactor = 0.95f; // Adjust as needed 
 //const float coefficientOfRestitution = 0.7f; //  adjust as needed 
-bool shouldPrint = true; // Set to false to disable printing
+bool shouldPrint = false; // Set to false to disable printing
 
-
+float coefficientOfRestitution = 0.9f; // Bounciness of the cube's walls 
 
 void SymplecticEuler(vec3& pos, vec3& vel, float mass, const vec3& accel, const vec3& impulse, float dt)
 {
@@ -53,7 +53,44 @@ void UpdateAngularIntegration(RigidBody& rb, float deltaTime) {
 	rb.SetOrientation(glm::mat4(R));
 }
 
+void PhysicsEngine::HandleCollisionsWithinCell(GridCell& cell, float deltaTime) {
+    // Check collisions within the grid cell
+    for (size_t i = 0; i < cell.particles.size(); ++i) {
+        Particle& p = *cell.particles[i];
 
+        for (size_t j = i + 1; j < cell.particles.size(); ++j) {
+            Particle& q = *cell.particles[j];
+            vec3 displacement = q.Position() - p.Position();
+            float distance = glm::length(displacement);
+            float combinedRadius = PARTICLE_RADIUS * 2;
+
+            if (distance < combinedRadius) { // Collision detected
+                vec3 normal = glm::normalize(displacement);
+                float penetration = combinedRadius - distance;
+
+                // Calculate new velocities using the coefficient of restitution
+                vec3 relativeVelocity = q.Velocity() - p.Velocity();
+                float velocityAlongNormal = glm::dot(relativeVelocity, normal);
+                if (velocityAlongNormal > 0) continue;
+
+                float e = coefficientOfRestitution;
+                float impulseMagnitude = -(1 + e) * velocityAlongNormal;
+                impulseMagnitude /= (1 / p.Mass() + 1 / q.Mass());
+
+                vec3 impulse = impulseMagnitude * normal;
+
+                p.SetVelocity(p.Velocity() - impulse / p.Mass());
+                q.SetVelocity(q.Velocity() + impulse / q.Mass());
+
+                // Position correction to prevent sinking due to floating point precision issues
+                vec3 correction = (penetration / (1 / p.Mass() + 1 / q.Mass())) * normal;
+                p.SetPosition(p.Position() + correction / (2 * p.Mass()));
+                q.SetPosition(q.Position() - correction / (2 * q.Mass()));
+            }
+        }
+
+    }
+}
 
 
 // This is called once
@@ -100,9 +137,9 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 	for (int i = 0; i < TOTAL_PARTICLES; ++i) {
 		int type = rand() % 3; // Keep the random type if it applies to your simulation
 		// Randomize positions within bounds 
-		float posX = static_cast<float>(rand()) / RAND_MAX * 30.0f - 15.0f; // Random X between -15 and 15
+		float posX = static_cast<float>(rand()) / RAND_MAX * 300.0f - 150.0f; // Random X between -15 and 15
 		float posY = PARTICLE_RADIUS + 1.0f;
-		float posZ = static_cast<float>(rand()) / RAND_MAX * 30.0f - 15.0f; // Random Z between -15 and 15
+		float posZ = static_cast<float>(rand()) / RAND_MAX * 300.0f - 150.0f; // Random Z between -15 and 15
 
 
 		// Randomize velocities between -20 and 20 m/sec for the x and z axes
@@ -127,11 +164,13 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 		particle.SetColor(colors[type]);
 		particle.SetScale(vec3(1.0f));
 		particle.SetMass(masses[type]);
+
+		// Add particle to grid
+		AddParticleToGrid(particle); 
 	}
 
 
-
-	camera = Camera(vec3(10, 300, 300));
+	camera = Camera(vec3(10, 100, 100));
 }
 
 
@@ -155,6 +194,8 @@ void PhysicsEngine::Task1Init() {
 		glm::vec3 vel(velocityDist(generator), velocityDist(generator), velocityDist(generator));
 		particle.SetPosition(pos);
 		particle.SetVelocity(vel);
+
+		AddParticleToGrid(particle);
 	}
 }
 
@@ -185,11 +226,12 @@ bool PhysicsEngine::determineIfNewSeedIsRequired() {
 // This should be called every fixed time step, e.g., 0.016 seconds for 60Hz
 ///CHECK WITH BABIS IF I SHOULD USE DELTATIME INSTEAD OF FIXEDdELTATIME IN UPDATE LOOP
 void PhysicsEngine::Update(const float deltaTime) {
+	ClearGrid(); // Clear the grid for new assignments 
 	elapsedTime += deltaTime;  // Keep track of the elapsed time 
 	// Define properties of the environment
 	const glm::vec3 cubeCentre = glm::vec3(0.0f, 0.0f, 0.0f); // Centre of the cube
 	float cubeSize = 60.0f; // Cube extends in the y-axis, represents half the total height
-	float coefficientOfRestitution = 0.9f; // Bounciness of the cube's walls
+	
 	glm::vec3 cubeHalfExtents = glm::vec3(cubeSize) / 2.0f;  
 
 	// Simplified drag constant for the simulation
@@ -201,6 +243,9 @@ void PhysicsEngine::Update(const float deltaTime) {
 	float maxX = cubeCentre.x + cubeHalfExtents.x * 10;
 	float minZ = cubeCentre.z - cubeHalfExtents.z * 10;
 	float maxZ = cubeCentre.z + cubeHalfExtents.z * 10;
+
+	
+
 
 	// Iterate over each particle to update their physics state
 	for (int i = 0; i < TOTAL_PARTICLES; i++) {
@@ -221,59 +266,12 @@ void PhysicsEngine::Update(const float deltaTime) {
 			if (vel.y < 0) vel.y = -vel.y * coefficientOfRestitution; // Reflect velocity
 		}
 
-		// Check and handle collision with the cube's walls
-		//CheckCollisionWithWalls(p, cubeCentre, cubeSize, coefficientOfRestitution);
-
 		// Finalize updates
 		p.SetPosition(pos);
 		p.SetVelocity(vel);
+		AddParticleToGrid(p); 
 	}
-
-	for (int i = 0; i < TOTAL_PARTICLES; i++) {
-		Particle& p = particles[i];
-		glm::vec3 position = p.Position();
-		glm::vec3 velocity = p.Velocity();
-
-		// Check collisions with other particles
-		for (int j = i + 1; j < TOTAL_PARTICLES; j++) {
-			Particle& q = particles[j];
-			glm::vec3 position2 = q.Position();
-			glm::vec3 velocity2 = q.Velocity();
-
-			glm::vec3 displacement = position2 - position;
-			float distance = glm::length(displacement);
-			float combinedRadius = PARTICLE_RADIUS * 2;
-
-			if (distance < combinedRadius) { // Collision detected
-				glm::vec3 normal = glm::normalize(displacement);
-				float penetration = combinedRadius - distance;
-
-				// Calculate new velocities using the coefficient of restitution
-				glm::vec3 relativeVelocity = velocity2 - velocity;
-				float velocityAlongNormal = glm::dot(relativeVelocity, normal);
-				if (velocityAlongNormal > 0) continue;
-
-				float e = coefficientOfRestitution;
-				float impulseMagnitude = -(1 + e) * velocityAlongNormal;
-				impulseMagnitude /= (1 / p.Mass() + 1 / q.Mass());
-
-				glm::vec3 impulse = impulseMagnitude * normal;
-
-				velocity -= impulse / p.Mass();
-				velocity2 += impulse / q.Mass();
-
-				// Position correction to prevent sinking due to floating point precision issues
-				glm::vec3 correction = (penetration / (1 / p.Mass() + 1 / q.Mass())) * normal;
-				position += correction / (2 * p.Mass());
-				position2 -= correction / (2 * q.Mass());
-			}
-
-			q.SetPosition(position2);
-			q.SetVelocity(velocity2);
-		}
-
-	}
-	 //wall collision Iterate over each particle to update their physics state with 
+	// Iterate over each particle to update their physics state with wall collision
 	for (int i = 0; i < TOTAL_PARTICLES; i++) {
 		Particle& p = particles[i];
 		glm::vec3 position = p.Position();
@@ -306,18 +304,22 @@ void PhysicsEngine::Update(const float deltaTime) {
 			}
 		}
 
-		// Apply drag force (simplified for this example)
-		glm::vec3 dragForce = -0.02f * glm::length(velocity) * velocity;
-		glm::vec3 acceleration = GRAVITY + dragForce / p.Mass(); // Total acceleration from gravity and drag
-
-		// Update position and velocity using symplectic Euler integration
-		velocity += acceleration * deltaTime;
-		position += velocity * deltaTime;
-
-		// Update particle's position and velocity
+		// Update particle's position and velocity after collision
 		p.SetPosition(position);
 		p.SetVelocity(velocity);
 	}
+
+
+	// Handle collisions within each grid cell
+	for (auto& row : grid) {
+		for (auto& cellColumn : row) {
+			for (auto& cell : cellColumn) {
+				HandleCollisionsWithinCell(cell, deltaTime);
+			}
+		}
+	}
+
+	
 }
 
 
