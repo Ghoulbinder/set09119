@@ -17,10 +17,12 @@ class PhysicsEngine
 {
 public:
 
+	unsigned int initialSeed; 
+
 	struct GridCell {
 		std::vector<Particle*> particles;
 	};
-
+	// Constructor
 	PhysicsEngine()
 		: gridOrigin(0.0f, 0.0f, 0.0f), // Initialize gridOrigin with proper coordinates 
 		gridSizeX(gridSize), 
@@ -30,6 +32,7 @@ public:
 		// Initialize the 3D grid
 		grid.resize(gridSizeX, std::vector<std::vector<GridCell>>(1, std::vector<GridCell>(gridSizeZ)));
 	}
+	// Method to handle collisions within a grid cell
 	void HandleCollisionsWithinCell(GridCell& cell, float deltaTime); // Add this line 
 	void Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb);
 	void Update(float deltaTime);
@@ -39,11 +42,9 @@ public:
 	void Task1Init();
 	void Task1Update(float deltaTime, float totalTime);
 
-	bool determineIfNewSeedIsRequired();
-	// ... rest of the tasks here
-	//PhysicsEngine() : generator(static_cast<unsigned int>(std::time(nullptr))) {}
+	
 
-
+	// Method to add a particle to the grid
 	void AddParticleToGrid(Particle& particle) {
 		int x = (int)((particle.Position().x - gridOrigin.x) / cellSize + 0.5f);
 		int z = (int)((particle.Position().z - gridOrigin.z) / cellSize + 0.5f);
@@ -52,7 +53,7 @@ public:
 
 		grid[x][0][z].particles.push_back(&particle);
 	}
-
+	// Method to clear the grid
 	void ClearGrid() {
 		for (auto& row : grid)
 			for (auto& layer : row)
@@ -67,13 +68,13 @@ private:
 	const glm::vec3 gridOrigin;
 
 	
-
+	// 3D grid to store particles
 	std::vector<std::vector<std::vector<GridCell>>> grid;
 	int gridSizeX = gridSize, gridSizeZ = gridSize;
 	float elapsedTime; // This could be a timer or other condition variable 
 	
 	std::default_random_engine generator;  // Random engine as a member
-	bool needReset = false;  // Tracks whether a reset is needed
+	
 	bool useNewSeed = false;  // Determines if a new seed should be used on reset
 
 	//std::vector<Particle> particles;

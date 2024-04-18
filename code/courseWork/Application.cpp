@@ -10,6 +10,8 @@
 
 #include "Application.h"
 #include "Camera.h"
+#include "chrono"
+#include <vector> // Include if you use std::vector  
 
 // Some global variables to access from static function callbacks that GLFW uses
 double lastX = 0;
@@ -17,6 +19,11 @@ double lastY = 0;
 bool keys[1024];
 bool firstMouse = true;
 Camera camera;
+// Declare global variables for timing
+double currentTime = 0.0;
+double accumulator = 0.0;
+
+using namespace std::chrono; // Correct use of the namespace for chron 
 
 // This data stores, since last polling time, which keys changes state from pressed to released and vice versa
 struct key_state_t
@@ -115,8 +122,8 @@ int Application::InitWindow() {
 
 	// static variables for callback function
 	// window
-	static const GLuint REQUESTED_WIDTH = 800;
-	static const GLuint REQUESTED_HEIGHT = 600;
+	static const GLuint REQUESTED_WIDTH = 1240;
+	static const GLuint REQUESTED_HEIGHT = 800;
 
 	m_window = glfwCreateWindow(REQUESTED_WIDTH, REQUESTED_HEIGHT, "Physics-Based Animation", nullptr, nullptr);
 
@@ -176,26 +183,31 @@ void Application::MainLoop() {
 	// Prepare some time bookkeeping
 	const GLfloat timeStart = (GLfloat)glfwGetTime(); 
 	GLfloat lastFrameTimeSinceStart = 0.0f;
-	 
-
+	auto previousTime = high_resolution_clock::now();
+	const float dt = 0.016f; // Fixed delta time step
+	
 	while (!glfwWindowShouldClose(m_window))
 	{
-		// time elapsed since application start
-		GLfloat timeSinceStart = (GLfloat)glfwGetTime() - timeStart;
+		auto currentTimePoint = high_resolution_clock::now(); // Get the current time
+		auto timeSinceEpoch = currentTimePoint.time_since_epoch(); // Get the time since epoch
+		double newTime = duration_cast<duration<double>>(timeSinceEpoch).count(); // Convert time to seconds
 
-		// calculate the delta time since last frame
-		auto deltaTime = timeSinceStart - lastFrameTimeSinceStart;
+		double frameTime = newTime - currentTime; // Calculate frame time
+		currentTime = newTime; // Update current time
 
-		// save the current time since start to the previous time since start, so that we can calculate the elapsed time between the different frames
-		lastFrameTimeSinceStart = timeSinceStart;
+		// Clamp frameTime to avoid spiral of death
+		if (frameTime > 0.25)
+			frameTime = 0.25;
 
-		accumulator += deltaTime; 
+		accumulator += frameTime; // Accumulate frame time
 
-		while (accumulator >= fixedDeltaTime) {
-			m_physEngine.Update(fixedDeltaTime); // Update physics with a fixed time step
-			accumulator -= fixedDeltaTime;
+		GLfloat deltaTime = frameTime; // Use frameTime as deltaTime for camera movement and other updates 
+
+		// Update physics with fixed time step
+		while (accumulator >= dt) {
+			m_physEngine.Update(dt); // Update physics
+			accumulator -= dt; // Reduce accumulator by fixed step
 		}
-
 		// poll input events
 		glfwPollEvents();
 

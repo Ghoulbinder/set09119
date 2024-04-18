@@ -19,10 +19,10 @@ const glm::vec3 GRAVITY = glm::vec3(0, -9.81, 0);
 // PARTICLE_RADIUS 
 const float PARTICLE_RADIUS = 1.0f; // Adjustable as needed
 
-const int GRID_SIZE = 10;
+
 // Adjusted for 3 grids of 10x10 particles each
 const int TOTAL_PARTICLES = 1000;
-Particle particles[TOTAL_PARTICLES];
+RigidBody particles[TOTAL_PARTICLES]; 
 
 const float dampingFactor = 0.95f; // Adjust as needed 
 //const float coefficientOfRestitution = 0.7f; //  adjust as needed 
@@ -30,15 +30,11 @@ bool shouldPrint = false; // Set to false to disable printing
 
 float coefficientOfRestitution = 0.9f; // Bounciness of the cube's walls 
 
-void SymplecticEuler(vec3& pos, vec3& vel, float mass, const vec3& accel, const vec3& impulse, float dt)
-{
-
-	// Using the integrator, compute the new velocity (vel+1)
-	vel = vel + dt * accel;
-
-	// Using the integrator, compute the new position (pos+1)
-	pos = pos + dt * vel;
-}
+std::vector<glm::vec4> colorOptions = {
+	glm::vec4(1.0f, 0.0f, 0.0f, 1.0f),  // Red
+	glm::vec4(0.0f, 1.0f, 0.0f, 1.0f),  // Green
+	glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)   // Blue
+}; 
 
 
 void UpdateAngularIntegration(RigidBody& rb, float deltaTime) {
@@ -51,6 +47,17 @@ void UpdateAngularIntegration(RigidBody& rb, float deltaTime) {
 	R = glm::orthonormalize(R);
 
 	rb.SetOrientation(glm::mat4(R));
+}
+ 
+void SymplecticEuler(vec3& pos, vec3& vel, float mass, const vec3& accel, const vec3& impulse, float dt, RigidBody& rb) {
+	// Using the integrator, compute the new velocity (vel+1)
+	vel = vel + dt * accel;
+
+	// Using the integrator, compute the new position (pos+1)
+	pos = pos + dt * vel;
+
+	// Update angular velocity and orientation
+	UpdateAngularIntegration(rb, dt);
 }
 
 void PhysicsEngine::HandleCollisionsWithinCell(GridCell& cell, float deltaTime) {
@@ -96,9 +103,6 @@ void PhysicsEngine::HandleCollisionsWithinCell(GridCell& cell, float deltaTime) 
 // This is called once
 void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 {
-
-
-
 	meshDb.Add("cube", Mesh(MeshDataFromWavefrontObj("resources/models/cube.obj")));
 	meshDb.Add("sphere", Mesh(MeshDataFromWavefrontObj("resources/models/sphere.obj")));
 	meshDb.Add("cone", Mesh(MeshDataFromWavefrontObj("resources/models/cone.obj")));
@@ -119,106 +123,99 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 	sphere.SetMesh(sphereMesh);
 	sphere.SetShader(defaultShader);
 
-	//sphere.SetPosition(vec3(0.0f, 0.0f, 0.0f));  // Center the cube at the same position as the ground
+	
 
 	srand(static_cast<unsigned int>(time(0)));
-
+	// Store the current time as the seed
+	initialSeed = static_cast<unsigned int>(std::time(nullptr));   
 	// Sphere type definitions
 	vec4 colors[] = { vec4(1, 0, 0, 1), vec4(0, 1, 0, 1), vec4(0, 0, 1, 1) };
 	float masses[] = { 1.0f, 2.0f, 3.0f };
-	const float PARTICLE_RADIUS = 1.0f; // Sphere radius
+
 
 	int numParticlesPerGrid = 1; // Adjust as needed
-	int totalGrids = GRID_SIZE * GRID_SIZE; // Total number of grids
-
-	//float gridSpacing = 30.0f; // Adjust as needed
+	
 	float initialY = PARTICLE_RADIUS;
 
-	for (int i = 0; i < TOTAL_PARTICLES; ++i) {
-		int type = rand() % 3; // Keep the random type if it applies to your simulation
-		// Randomize positions within bounds 
-		float posX = static_cast<float>(rand()) / RAND_MAX * 300.0f - 150.0f; // Random X between -15 and 15
-		float posY = PARTICLE_RADIUS + 1.0f;
-		float posZ = static_cast<float>(rand()) / RAND_MAX * 300.0f - 150.0f; // Random Z between -15 and 15
 
-
-		// Randomize velocities between -20 and 20 m/sec for the x and z axes
-		float velX = static_cast<float>(rand()) / RAND_MAX * 40.0f - 20.0f; // Random velocity X between -20 and 20
-		// Assuming no specific requirement for Y velocity, set to a default or randomize as needed
-		float velY = 0.0f; // Default Y velocity
-		float velZ = static_cast<float>(rand()) / RAND_MAX * 40.0f - 20.0f; // Random velocity Z between -20 and 20
-		// Randomize velocities to be between 1 and 3 for each axis
-		//float velX = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; // Random velocity X between 1 and 3
-		//float velY = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; 
-		//float velZ = static_cast<float>(rand()) / RAND_MAX * 2.0f + 1.0f; // Random velocity Z between 1 and 3
-
-		// Setup particle with the random position and velocity
-		Particle& particle = particles[i];
-		particle.SetPosition(vec3(posX, posY, posZ));
-		particle.SetVelocity(vec3(velX, velY, velZ));
-
-		// Spawn particle
+	// Initialize the seed only if it has not been initialized before
+	if (initialSeed == 0) {
+		initialSeed = static_cast<unsigned int>(std::time(nullptr));
 		
-		particle.SetMesh(meshDb.Get("sphere"));
-		particle.SetShader(shaderDb.Get("default"));
-		particle.SetColor(colors[type]);
-		particle.SetScale(vec3(1.0f));
-		particle.SetMass(masses[type]);
+	}
+
+		
+	generator.seed(initialSeed);
+	
+	
+	
+	std::uniform_real_distribution<float> positionDistXZ(-150.0f, 150.0f);
+	std::uniform_real_distribution<float> velocityDistXZ(-20.0f, 20.0f);  // Velocity distribution for x and z
+	std::uniform_real_distribution<float> angleDist(-1.0f, 1.0f);  // Angular velocity range 
+	std::uniform_int_distribution<> colorIndexDist(0, 2); // Random index for selecting color
+	std::vector<float> massOptions = { 1.0f, 2.0f, 3.0f };  // Possible masses  
+	std::uniform_int_distribution<> massIndexDist(0, massOptions.size() - 1); 
+
+
+	for (int i = 0; i < TOTAL_PARTICLES; ++i) {
+		glm::vec3 pos(positionDistXZ(generator), 0.0f, positionDistXZ(generator));
+		glm::vec3 vel(velocityDistXZ(generator), 0.0f, velocityDistXZ(generator));
+		glm::vec3 angVel(angleDist(generator), angleDist(generator), angleDist(generator));  // Generate random angular velocity 
+		float mass = massOptions[massIndexDist(generator)];  // Select a mass randomly from the options
+		glm::vec4 color = colorOptions[colorIndexDist(generator)]; // Select color randomly
+
+		particles[i].SetPosition(pos);
+		particles[i].SetVelocity(vel);
+		particles[i].SetAngularVelocity(angVel);  // Set the random angular velocity 
+		particles[i].SetMass(mass);  // Set the randomly chosen mass
+		// Set other properties like mesh and shader, etc.
+		particles[i].SetMesh(meshDb.Get("sphere"));
+		particles[i].SetShader(shaderDb.Get("default"));
+		particles[i].SetColor(color);  // Set the randomly chosen color 
+		//particles[i].SetColor(vec4(rand() % 256 / 255.0f, rand() % 256 / 255.0f, rand() % 256 / 255.0f, 1.0));
+		// Set initial angular properties if needed
+		//particles[i].SetAngularVelocity(glm::vec3(0));  // Start with no angular velocity 
+		//particles[i].SetAngularAcceleration(glm::vec3(0));  // Start with no angular acceleration 
+	
+		
 
 		// Add particle to grid
-		AddParticleToGrid(particle); 
+		AddParticleToGrid(particles[i]); 
 	}
 
 
-	camera = Camera(vec3(10, 100, 100));
-}
+	camera = Camera(vec3(10, 100, 100)); 
+} 
 
 
 void PhysicsEngine::Task1Init() {
-	if (useNewSeed) {
-		// Reinitialize the random number generator with a new random seed
-		std::random_device rd;
-		generator.seed(rd());
-	}
-	else {
-		// Reinitialize the random number generator with the current time as the seed
-		generator.seed(static_cast<unsigned int>(std::time(nullptr)));
-	}
-
-	// Reinitialize particles using the selected seed
-	std::uniform_real_distribution<float> positionDist(-15.0f, 15.0f);
-	std::uniform_real_distribution<float> velocityDist(-20.0f, 20.0f);
+	std::uniform_real_distribution<float> positionDistXZ(-150.0f, 150.0f);
+	std::uniform_real_distribution<float> velocityDistXZ(-20.0f, 20.0f);
+	std::vector<float> massOptions = { 1.0f, 2.0f, 3.0f };
+	std::uniform_int_distribution<> massIndexDist(0, massOptions.size() - 1); // Same mass distribution as in Init
+	std::uniform_int_distribution<> colorIndexDist(0, 2);
 
 	for (Particle& particle : particles) {
-		glm::vec3 pos(positionDist(generator), positionDist(generator), positionDist(generator));
-		glm::vec3 vel(velocityDist(generator), velocityDist(generator), velocityDist(generator));
+		glm::vec3 pos(positionDistXZ(generator), 0.0f, positionDistXZ(generator));
+		glm::vec3 vel(velocityDistXZ(generator), 0.0f, velocityDistXZ(generator));
+		float mass = massOptions[massIndexDist(generator)];  // Randomly select mass
+		glm::vec4 color = colorOptions[colorIndexDist(generator)]; // Select color randomly 
+
 		particle.SetPosition(pos);
 		particle.SetVelocity(vel);
-
+		particle.SetMass(mass);
+		particle.SetColor(color); 
 		AddParticleToGrid(particle);
 	}
+
 }
 
 
 void PhysicsEngine::Task1Update(float deltaTime, float totalTime){
-	// Handle particle updates, collisions, etc.
-	// Optionally, check for a condition to reset with the same or a new seed
-	if (needReset) {
-		bool useNewSeed = determineIfNewSeedIsRequired();
-		if (useNewSeed) {
-			// Re-seed the generator
-			static_cast<std::default_random_engine*>(nullptr)->seed(static_cast<unsigned int>(time(nullptr)));
-		}
-		Task1Init(); // Reinitialize particles with the new or same seed
-	}
+	
 
 
 
-}
-bool PhysicsEngine::determineIfNewSeedIsRequired() {
-	// Reset the seed if more than 100 seconds have elapsed or 
-	// if the user has requested a seed reset.
-	return elapsedTime > 100.0f || needReset;
 }
 
 
@@ -228,6 +225,7 @@ bool PhysicsEngine::determineIfNewSeedIsRequired() {
 void PhysicsEngine::Update(const float deltaTime) {
 	ClearGrid(); // Clear the grid for new assignments 
 	elapsedTime += deltaTime;  // Keep track of the elapsed time 
+
 	// Define properties of the environment
 	const glm::vec3 cubeCentre = glm::vec3(0.0f, 0.0f, 0.0f); // Centre of the cube
 	float cubeSize = 60.0f; // Cube extends in the y-axis, represents half the total height
@@ -236,7 +234,7 @@ void PhysicsEngine::Update(const float deltaTime) {
 
 	// Simplified drag constant for the simulation
 	float k = 0.02f;
-
+	
 	// Bounds for walls around the top side of the cuboid
 	float top  = cubeCentre.y + cubeHalfExtents.y * 10;
 	float minX = cubeCentre.x - cubeHalfExtents.x * 10;
@@ -244,21 +242,23 @@ void PhysicsEngine::Update(const float deltaTime) {
 	float minZ = cubeCentre.z - cubeHalfExtents.z * 10;
 	float maxZ = cubeCentre.z + cubeHalfExtents.z * 10;
 
-	
 
 
 	// Iterate over each particle to update their physics state
 	for (int i = 0; i < TOTAL_PARTICLES; i++) {
-		Particle& p = particles[i];
+		RigidBody& rb = particles[i]; 
 
 		// Calculate drag force for the current particle
-		vec3 velocity = p.Velocity();
+		vec3 velocity = rb.Velocity();
 		vec3 dragForce = -k * glm::length(velocity) * velocity; // Quadratic drag formula
-		vec3 acceleration = GRAVITY + dragForce / p.Mass(); // Total acceleration from gravity and drag
+		vec3 acceleration = GRAVITY + dragForce / rb.Mass(); // Total acceleration from gravity and drag
 
 		// Update position and velocity using symplectic Euler
-		vec3 pos = p.Position(), vel = p.Velocity();
-		SymplecticEuler(pos, vel, p.Mass(), acceleration, glm::vec3(0.0f), deltaTime);
+		vec3 pos = rb.Position(), vel = rb.Velocity(); 
+		SymplecticEuler(pos, vel, rb.Mass(), acceleration, glm::vec3(0.0f), deltaTime, rb); 
+
+		// Update angular properties using provided function
+		UpdateAngularIntegration(rb, deltaTime); 
 
 		// Check and handle collision with the ground
 		if (pos.y <= PARTICLE_RADIUS) {
@@ -267,15 +267,18 @@ void PhysicsEngine::Update(const float deltaTime) {
 		}
 
 		// Finalize updates
-		p.SetPosition(pos);
-		p.SetVelocity(vel);
-		AddParticleToGrid(p); 
+		rb.SetPosition(pos);
+		rb.SetVelocity(vel);
+
+
+		AddParticleToGrid(rb);
 	}
+
 	// Iterate over each particle to update their physics state with wall collision
 	for (int i = 0; i < TOTAL_PARTICLES; i++) {
-		Particle& p = particles[i];
-		glm::vec3 position = p.Position();
-		glm::vec3 velocity = p.Velocity();
+		RigidBody& rb = particles[i];  
+		glm::vec3 position = rb.Position(); 
+		glm::vec3 velocity = rb.Velocity(); 
 		glm::vec3 impulse = glm::vec3(0.0f);
 
 		// Check and handle collision with the top surface and the walls
@@ -305,8 +308,8 @@ void PhysicsEngine::Update(const float deltaTime) {
 		}
 
 		// Update particle's position and velocity after collision
-		p.SetPosition(position);
-		p.SetVelocity(velocity);
+		rb.SetPosition(position); 
+		rb.SetVelocity(velocity); 
 	}
 
 
@@ -344,10 +347,14 @@ void PhysicsEngine::HandleInputKey(int keyCode, bool pressed)
 	if (pressed) {
 		switch (keyCode) {
 		case 'R': // Restart with the same seed
+			// Reinitialize particles with the same seed
+			generator.seed(initialSeed); 
 			Task1Init(); // Reinitialize particles with the same seed
 			break;
 		case 'U': // Restart with a new random seed
-			useNewSeed = true; // Set flag to use a new seed
+			// Generate a new seed, reseed the generator, and reinitialize particles
+			initialSeed = static_cast<unsigned int>(std::time(nullptr));  // Update the initial seed with a new value
+			generator.seed(initialSeed); 
 			Task1Init(); // Reinitialize particles with a new seed
 			break;
 			// Other cases...
