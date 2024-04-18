@@ -173,11 +173,7 @@ void PhysicsEngine::Init(Camera& camera, MeshDb& meshDb, ShaderDb& shaderDb)
 		particles[i].SetShader(shaderDb.Get("default"));
 		particles[i].SetColor(color);  // Set the randomly chosen color 
 		//particles[i].SetColor(vec4(rand() % 256 / 255.0f, rand() % 256 / 255.0f, rand() % 256 / 255.0f, 1.0));
-		// Set initial angular properties if needed
-		//particles[i].SetAngularVelocity(glm::vec3(0));  // Start with no angular velocity 
-		//particles[i].SetAngularAcceleration(glm::vec3(0));  // Start with no angular acceleration 
 	
-		
 
 		// Add particle to grid
 		AddParticleToGrid(particles[i]); 
@@ -224,7 +220,7 @@ void PhysicsEngine::Task1Update(float deltaTime, float totalTime){
 ///CHECK WITH BABIS IF I SHOULD USE DELTATIME INSTEAD OF FIXEDdELTATIME IN UPDATE LOOP
 void PhysicsEngine::Update(const float deltaTime) {
 	ClearGrid(); // Clear the grid for new assignments 
-	elapsedTime += deltaTime;  // Keep track of the elapsed time 
+	
 
 	// Define properties of the environment
 	const glm::vec3 cubeCentre = glm::vec3(0.0f, 0.0f, 0.0f); // Centre of the cube
@@ -233,7 +229,8 @@ void PhysicsEngine::Update(const float deltaTime) {
 	glm::vec3 cubeHalfExtents = glm::vec3(cubeSize) / 2.0f;  
 
 	// Simplified drag constant for the simulation
-	float k = 0.02f;
+	// Use drag constant based on toggle  
+	float k = dragEnabled ? 0.02f : 0.0f; 
 	
 	// Bounds for walls around the top side of the cuboid
 	float top  = cubeCentre.y + cubeHalfExtents.y * 10;
@@ -251,7 +248,8 @@ void PhysicsEngine::Update(const float deltaTime) {
 		// Calculate drag force for the current particle
 		vec3 velocity = rb.Velocity();
 		vec3 dragForce = -k * glm::length(velocity) * velocity; // Quadratic drag formula
-		vec3 acceleration = GRAVITY + dragForce / rb.Mass(); // Total acceleration from gravity and drag
+		glm::vec3 acceleration = GRAVITY + (dragEnabled ? dragForce : glm::vec3(0)) / rb.Mass(); 
+
 
 		// Update position and velocity using symplectic Euler
 		vec3 pos = rb.Position(), vel = rb.Velocity(); 
@@ -356,6 +354,10 @@ void PhysicsEngine::HandleInputKey(int keyCode, bool pressed)
 			initialSeed = static_cast<unsigned int>(std::time(nullptr));  // Update the initial seed with a new value
 			generator.seed(initialSeed); 
 			Task1Init(); // Reinitialize particles with a new seed
+			break;
+		case 'E':
+			dragEnabled = !dragEnabled;  // Toggle the drag force on or off
+			std::cout << "Drag force is now " << (dragEnabled ? "enabled" : "disabled") << ".\n";
 			break;
 			// Other cases...
 		}

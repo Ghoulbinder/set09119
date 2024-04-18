@@ -16,7 +16,7 @@ class Camera;
 class PhysicsEngine
 {
 public:
-
+	bool dragEnabled = true;  // Initially, drag force is enabled 
 	unsigned int initialSeed; 
 
 	struct GridCell {
@@ -71,7 +71,7 @@ private:
 	// 3D grid to store particles
 	std::vector<std::vector<std::vector<GridCell>>> grid;
 	int gridSizeX = gridSize, gridSizeZ = gridSize;
-	float elapsedTime; // This could be a timer or other condition variable 
+	
 	
 	std::default_random_engine generator;  // Random engine as a member
 	
